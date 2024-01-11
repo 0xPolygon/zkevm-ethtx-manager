@@ -81,10 +81,6 @@ init-network: ## Initializes the network
 show-logs:  ## Show logs for running docker 
 	$(DOCKERCOMPOSE) logs
 
-.PHONY: run-db-scripts
-run-db-scripts: ## Executes scripts on the db after it has been initialized, potentially using info from the environment
-	./scripts/postgres/run.sh
-
 ## Help display.
 ## Pulls comments from beside commands and prints a nicely formatted
 ## display with the commands and their usage information.
