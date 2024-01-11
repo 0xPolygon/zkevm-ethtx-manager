@@ -457,10 +457,8 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 
 	// if mined, check receipt and mark as Failed or Confirmed
 	if lastReceiptChecked.Status == types.ReceiptStatusSuccessful {
-		// TODO: TR REVIEW THIS
 		/*
 			receiptBlockNum := lastReceiptChecked.BlockNumber.Uint64()
-
 			// check if state is already synchronized until the block
 			// where the tx was mined
 			block, err := c.state.GetLastBlock(ctx, nil)
@@ -479,6 +477,9 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 				logger.Info("confirmed")
 			}
 		*/
+		mTx.status = MonitoredTxStatusConfirmed
+		mTx.blockNumber = lastReceiptChecked.BlockNumber
+		logger.Info("confirmed")
 	} else {
 		// if we should continue to monitor, we move to the next one and this will
 		// be reviewed in the next monitoring cycle
