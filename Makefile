@@ -46,7 +46,7 @@ build: check-go
 lint: check-go
 build-docker: check-docker
 build-docker-nc: check-docker
-run-ethx-manager: check-docker check-docker-compose
+run: check-docker check-docker-compose
 stop: check-docker check-docker-compose
 install-linter: check-go check-curl
 
@@ -63,7 +63,7 @@ build-docker-nc: ## Builds a docker image with the binary - but without build ca
 	docker build --no-cache=true -t zkevm-ethtx-manager -f ./Dockerfile .
 
 .PHONY: run-ethtxmanager
-run-ethtxmanager: ## Runs the eth tx manager
+run: ## Runs the eth tx manager
 	docker-compose up -d zkevm-ethtx-manager-db
 	sleep 2
 	docker-compose up -d zkevm-ethtx-manager

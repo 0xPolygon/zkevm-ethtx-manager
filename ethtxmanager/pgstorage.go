@@ -36,7 +36,7 @@ func NewPostgresStorage(dbCfg db.Config) (*PostgresStorage, error) {
 func (s *PostgresStorage) Add(ctx context.Context, mTx monitoredTx, dbTx pgx.Tx) error {
 	conn := s.dbConn(dbTx)
 	cmd := `
-        INSERT INTO state.monitored_txs (owner, id, from_addr, to_addr, nonce, value, data, gas, gas_offset, gas_price, status, block_num, history, created_at, updated_at)
+        INSERT INTO ethtxmgr.monitored_txs (owner, id, from_addr, to_addr, nonce, value, data, gas, gas_offset, gas_price, status, block_num, history, created_at, updated_at)
                                  VALUES (   $1, $2,        $3,      $4,    $5,    $6,   $7,  $8,         $9,       $10,    $11,       $12,     $13,        $14,        $15)`
 
 	_, err := conn.Exec(ctx, cmd, mTx.owner,
@@ -62,7 +62,7 @@ func (s *PostgresStorage) Get(ctx context.Context, owner, id string, dbTx pgx.Tx
 	conn := s.dbConn(dbTx)
 	cmd := `
         SELECT owner, id, from_addr, to_addr, nonce, value, data, gas, gas_offset, gas_price, status, block_num, history, created_at, updated_at
-          FROM state.monitored_txs
+          FROM ethtxmgr.monitored_txs
          WHERE owner = $1 
            AND id = $2`
 
@@ -86,7 +86,7 @@ func (s *PostgresStorage) GetByStatus(ctx context.Context, owner *string, status
 	conn := s.dbConn(dbTx)
 	cmd := `
         SELECT owner, id, from_addr, to_addr, nonce, value, data, gas, gas_offset, gas_price, status, block_num, history, created_at, updated_at
-          FROM state.monitored_txs
+          FROM ethtxmgr.monitored_txs
          WHERE (owner = $1 OR $1 IS NULL)`
 	if hasStatusToFilter {
 		cmd += `
@@ -129,7 +129,7 @@ func (s *PostgresStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *ui
 	conn := s.dbConn(dbTx)
 	cmd := `
         SELECT owner, id, from_addr, to_addr, nonce, value, data, gas, gas_offset, gas_price, status, block_num, history, created_at, updated_at
-          FROM state.monitored_txs
+          FROM ethtxmgr.monitored_txs
          WHERE (block_num >= $1 OR $1 IS NULL)
            AND (block_num <= $2 OR $2 IS NULL)
            AND block_num IS NOT NULL
@@ -175,7 +175,7 @@ func (s *PostgresStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *ui
 func (s *PostgresStorage) Update(ctx context.Context, mTx monitoredTx, dbTx pgx.Tx) error {
 	conn := s.dbConn(dbTx)
 	cmd := `
-        UPDATE state.monitored_txs
+        UPDATE ethtxmgr.monitored_txs
            SET from_addr = $3
              , to_addr = $4
              , nonce = $5
