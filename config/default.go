@@ -20,7 +20,7 @@ WaitTxToBeMined = "2m"
 ForcedGas = 0
 GasPriceMarginFactor = 1
 MaxGasPriceLimit = 0
-	[State.DB]
+	[EthTxManager.DB]
 		User = "ethtxmanager_user"
 		Password = "ethtxmanager_password"
 		Name = "ethtxmanager_db"

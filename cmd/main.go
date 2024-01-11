@@ -13,7 +13,7 @@ const appName = "zkevm-ethtx-manager"
 
 const (
 	// ETHTXMANAGER is the service that manages the tx sent to L1
-	ETHTXMANAGER = "eth-tx-manager"
+	ETHTXMANAGER = "ethtx-manager"
 )
 
 const (
