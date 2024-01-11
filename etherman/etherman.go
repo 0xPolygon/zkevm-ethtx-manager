@@ -5,27 +5,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-node/encoding"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/etherscan"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/ethgasstation"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/metrics"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/oldpolygonzkevm"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/oldpolygonzkevmglobalexitroot"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/pol"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/polygonrollupmanager"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/polygonzkevm"
-	"github.com/0xPolygonHermez/zkevm-node/etherman/smartcontracts/polygonzkevmglobalexitroot"
-	ethmanTypes "github.com/0xPolygonHermez/zkevm-node/etherman/types"
-	"github.com/0xPolygonHermez/zkevm-node/log"
-	"github.com/0xPolygonHermez/zkevm-node/state"
-	"github.com/0xPolygonHermez/zkevm-node/test/operations"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/encoding"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/ethgasstation"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/metrics"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/oldpolygonzkevm"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/oldpolygonzkevmglobalexitroot"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/pol"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/polygonrollupmanager"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/polygonzkevm"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/polygonzkevmglobalexitroot"
+	ethmanTypes "github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/types"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -308,6 +305,7 @@ func (etherMan *Client) VerifyGenBlockNumber(ctx context.Context, genBlockNumber
 	return true, nil
 }
 
+/*
 // GetForks returns fork information
 func (etherMan *Client) GetForks(ctx context.Context, genBlockNumber uint64, lastL1BlockSynced uint64) ([]state.ForkIDInterval, error) {
 	log.Debug("Getting forkIDs from blockNumber: ", genBlockNumber)
@@ -420,6 +418,7 @@ func (etherMan *Client) GetForks(ctx context.Context, genBlockNumber uint64, las
 	log.Debugf("ForkIDs found: %+v", forks)
 	return forks, nil
 }
+*/
 
 // GetRollupInfoByBlockRange function retrieves the Rollup information that are included in all this ethereum blocks
 // from block x to block y.
@@ -834,7 +833,7 @@ func (etherMan *Client) processUpdateGlobalExitRootEvent(ctx context.Context, ma
 
 // WaitTxToBeMined waits for an L1 tx to be mined. It will return error if the tx is reverted or timeout is exceeded
 func (etherMan *Client) WaitTxToBeMined(ctx context.Context, tx *types.Transaction, timeout time.Duration) (bool, error) {
-	err := operations.WaitTxToBeMined(ctx, etherMan.EthClient, tx, timeout)
+	err := WaitTxToBeMined(ctx, etherMan.EthClient, tx, timeout)
 	if errors.Is(err, context.DeadlineExceeded) {
 		return false, nil
 	}
@@ -1666,7 +1665,7 @@ func (etherMan *Client) GetRevertMessage(ctx context.Context, tx *types.Transact
 	}
 
 	if receipt.Status == types.ReceiptStatusFailed {
-		revertMessage, err := operations.RevertReason(ctx, etherMan.EthClient, tx, receipt.BlockNumber)
+		revertMessage, err := RevertReason(ctx, etherMan.EthClient, tx, receipt.BlockNumber)
 		if err != nil {
 			return "", err
 		}

@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager"
-	"github.com/0xPolygonHermez/zkevm-node/config"
-	"github.com/0xPolygonHermez/zkevm-node/log"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/urfave/cli/v2"
 )
 
@@ -61,11 +61,6 @@ var (
 		Usage:    "Blocks the migrations in stateDB to not run them",
 		Required: false,
 	}
-	outputFileFlag = cli.StringFlag{
-		Name:     config.FlagOutputFile,
-		Usage:    "Indicate the output file",
-		Required: true,
-	}
 )
 
 func main() {
@@ -76,7 +71,6 @@ func main() {
 		&configFileFlag,
 		&yesFlag,
 		&componentsFlag,
-		&httpAPIFlag,
 	}
 	app.Commands = []*cli.Command{
 		{

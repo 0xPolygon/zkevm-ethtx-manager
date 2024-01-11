@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/0xPolygonHermez/zkevm-node"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager"
 	"github.com/urfave/cli/v2"
 )
 

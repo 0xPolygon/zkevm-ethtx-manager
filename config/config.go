@@ -8,9 +8,10 @@ import (
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/metrics"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -44,17 +45,7 @@ const (
 	FlagDocumentationFileType = "config-file"
 )
 
-/*
-Config represents the configuration of the entire Hermez Node
-The file is [TOML format]
-You could find some examples:
-  - `config/environments/local/local.node.config.toml`: running a permisionless node
-  - `config/environments/mainnet/node.config.toml`
-  - `config/environments/public/node.config.toml`
-  - `test/config/test.node.config.toml`: configuration for a trusted node used in CI
-
-[TOML format]: https://en.wikipedia.org/wiki/TOML
-*/
+// Config represents the configuration of the eth tx manager
 type Config struct {
 	// Configure Log level for all the services, allow also to store the logs in a file
 	Log log.Config
@@ -62,6 +53,10 @@ type Config struct {
 	Etherman etherman.Config
 	// Configuration for ethereum transaction manager
 	EthTxManager ethtxmanager.Config
+	// Configuration of the genesis of the network. This is used to known the initial state of the network
+	NetworkConfig NetworkConfig
+	// Configuration of the metrics service, basically is where is going to publish the metrics
+	Metrics metrics.Config
 }
 
 // Default parses the default configuration values.
@@ -120,6 +115,11 @@ func Load(ctx *cli.Context, loadNetworkConfig bool) (*Config, error) {
 	err = viper.Unmarshal(&cfg, decodeHooks...)
 	if err != nil {
 		return nil, err
+	}
+
+	if loadNetworkConfig {
+		// Load genesis parameters
+		cfg.loadNetworkConfig(ctx)
 	}
 
 	return cfg, nil

@@ -13,15 +13,12 @@ import (
 )
 
 const (
-	// StateMigrationName is the name of the migration used by packr to pack the migration file
-	StateMigrationName = "zkevm-state-db"
-	// PoolMigrationName is the name of the migration used by packr to pack the migration file
-	PoolMigrationName = "zkevm-pool-db"
+	// EthTxManagerMigrationName is the name of the migration used by packr to pack the migration file
+	EthTxManagerMigrationName = "zkevm-state-db"
 )
 
 var packrMigrations = map[string]*packr.Box{
-	StateMigrationName: packr.New(StateMigrationName, "./migrations/state"),
-	PoolMigrationName:  packr.New(PoolMigrationName, "./migrations/pool"),
+	EthTxManagerMigrationName: packr.New(EthTxManagerMigrationName, "./migrations"),
 }
 
 // NewSQLDB creates a new SQL DB

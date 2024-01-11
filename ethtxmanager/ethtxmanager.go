@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
-	"github.com/0xPolygonHermez/zkevm-node/state"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -44,16 +43,17 @@ type Client struct {
 	cfg      Config
 	etherman ethermanInterface
 	storage  storageInterface
-	state    stateInterface
+	// state    stateInterface
 }
 
 // New creates new eth tx manager
-func New(cfg Config, ethMan ethermanInterface, storage storageInterface, state stateInterface) *Client {
+// func New(cfg Config, ethMan ethermanInterface, storage storageInterface, state stateInterface) *Client {
+func New(cfg Config, ethMan ethermanInterface, storage storageInterface) *Client {
 	c := &Client{
 		cfg:      cfg,
 		etherman: ethMan,
 		storage:  storage,
-		state:    state,
+		// state:    state,
 	}
 
 	return c
@@ -457,25 +457,28 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 
 	// if mined, check receipt and mark as Failed or Confirmed
 	if lastReceiptChecked.Status == types.ReceiptStatusSuccessful {
-		receiptBlockNum := lastReceiptChecked.BlockNumber.Uint64()
+		// TODO: TR REVIEW THIS
+		/*
+			receiptBlockNum := lastReceiptChecked.BlockNumber.Uint64()
 
-		// check if state is already synchronized until the block
-		// where the tx was mined
-		block, err := c.state.GetLastBlock(ctx, nil)
-		if errors.Is(err, state.ErrStateNotSynchronized) {
-			logger.Debugf("state not synchronized yet, waiting for L1 block %v to be synced", receiptBlockNum)
-			return
-		} else if err != nil {
-			logger.Errorf("failed to check if L1 block %v is already synced: %v", receiptBlockNum, err)
-			return
-		} else if block.BlockNumber < receiptBlockNum {
-			logger.Debugf("L1 block %v not synchronized yet, waiting for L1 block to be synced in order to confirm monitored tx", receiptBlockNum)
-			return
-		} else {
-			mTx.status = MonitoredTxStatusConfirmed
-			mTx.blockNumber = lastReceiptChecked.BlockNumber
-			logger.Info("confirmed")
-		}
+			// check if state is already synchronized until the block
+			// where the tx was mined
+			block, err := c.state.GetLastBlock(ctx, nil)
+			if errors.Is(err, state.ErrStateNotSynchronized) {
+				logger.Debugf("state not synchronized yet, waiting for L1 block %v to be synced", receiptBlockNum)
+				return
+			} else if err != nil {
+				logger.Errorf("failed to check if L1 block %v is already synced: %v", receiptBlockNum, err)
+				return
+			} else if block.BlockNumber < receiptBlockNum {
+				logger.Debugf("L1 block %v not synchronized yet, waiting for L1 block to be synced in order to confirm monitored tx", receiptBlockNum)
+				return
+			} else {
+				mTx.status = MonitoredTxStatusConfirmed
+				mTx.blockNumber = lastReceiptChecked.BlockNumber
+				logger.Info("confirmed")
+			}
+		*/
 	} else {
 		// if we should continue to monitor, we move to the next one and this will
 		// be reviewed in the next monitoring cycle

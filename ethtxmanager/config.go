@@ -1,6 +1,9 @@
 package ethtxmanager
 
-import "github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
+import (
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/db"
+)
 
 // Config is configuration for ethereum transaction manager
 type Config struct {
@@ -48,4 +51,6 @@ type Config struct {
 	// max gas price limit: 110
 	// tx gas price = 110
 	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
+	// DB is the database configuration
+	DB db.Config `mapstructure:"DB"`
 }
