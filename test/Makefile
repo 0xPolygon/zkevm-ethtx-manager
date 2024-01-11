@@ -17,15 +17,14 @@ STOPMETRICS := $(DOCKERCOMPOSE) stop $(DOCKERCOMPOSEMETRICS) && $(DOCKERCOMPOSE)
 
 STOP := $(DOCKERCOMPOSE) down --remove-orphans
 
-.PHONY: test-full # Runs all tests
-test-full-non-e2e: stop 
+.PHONY: test # Runs all tests
+test: stop 
 	$(RUNETHTXMANAGERDB)
 	sleep 2
 	$(RUNL1NETWORK)
 	sleep 15
 	docker ps -a
 	trap '$(STOP)' EXIT; MallocNanoZone=0 go test -count=1 -short -race -p 1 -covermode=atomic -coverprofile=../coverage.out -timeout 70s ../...
-
 
 .PHONY: run-db
 run-db: ## Runs the database
