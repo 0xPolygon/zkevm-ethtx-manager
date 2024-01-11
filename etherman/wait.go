@@ -128,6 +128,7 @@ func RevertReason(ctx context.Context, c ethClienter, tx *types.Transaction, blo
 	return unpackedMsg, nil
 }
 
+// WaitTxReceipt waits until a tx receipt is available or the given timeout expires.
 func WaitTxReceipt(ctx context.Context, txHash common.Hash, timeout time.Duration, client *ethclient.Client) (*types.Receipt, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client is nil")
