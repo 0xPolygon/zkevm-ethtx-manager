@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -43,26 +44,63 @@ type Client struct {
 
 // New creates new eth tx manager
 // func New(cfg Config, ethMan ethermanInterface, storage storageInterface, state stateInterface) *Client {
-func New(cfg Config, etherMan ethermanInterface, storage storageInterface) *Client {
-	client := &Client{
-		cfg:      cfg,
-		etherman: etherMan,
-		storage:  storage,
+func New(cfg Config) (*Client, error) {
+	etherman, err := etherman.NewClient(cfg.Etherman)
+	if err != nil {
+		return nil, err
 	}
 
-	return client
+	auth, err := etherman.LoadAuthFromKeyStore(cfg.PrivateKeys[0].Path, cfg.PrivateKeys[0].Password)
+	if err != nil {
+		return nil, err
+	}
+
+	err = etherman.AddOrReplaceAuth(*auth)
+	if err != nil {
+		return nil, err
+	}
+
+	client := Client{
+		cfg:      cfg,
+		etherman: etherman,
+		storage:  NewMemStorage(),
+	}
+
+	return &client, nil
+}
+
+func (c *Client) PendingL1Txs(ctx context.Context) (bool, error) {
+	nonce, err := c.etherman.CurrentNonce(ctx, c.cfg.From)
+	if err != nil {
+		return false, err
+	}
+
+	pendingNonce, err := c.etherman.PendingNonce(ctx, c.cfg.From)
+	if err != nil {
+		return false, err
+	}
+
+	return nonce < pendingNonce, nil
 }
 
 // Add a transaction to be sent and monitored
-func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int, data []byte) (common.Hash, error) {
-	from := c.cfg.From
-	// get next nonce
-	nonce, err := c.etherman.CurrentNonce(ctx, from)
-	if err != nil {
-		err := fmt.Errorf("failed to get current nonce: %w", err)
-		log.Errorf(err.Error())
-		return common.Hash{}, err
+func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte) (common.Hash, error) {
+	var nonce uint64
+	var err error
+	var from = c.cfg.From
+
+	if forcedNonce == nil {
+		// get next nonce
+		nonce, err = c.etherman.CurrentNonce(ctx, from)
+		if err != nil {
+			err := fmt.Errorf("failed to get current nonce: %w", err)
+			log.Errorf(err.Error())
+			return common.Hash{}, err
+		}
+	} else {
+		nonce = *forcedNonce
 	}
+
 	// get gas
 	gas, err := c.etherman.EstimateGas(ctx, from, to, value, data)
 	if err != nil {
@@ -83,18 +121,23 @@ func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int, da
 		return common.Hash{}, err
 	}
 
-	// Calculate id as the hash of the to, nonce, value and data
-	bytesToHash := append(to.Bytes(), common.LeftPadBytes(big.NewInt(int64(nonce)).Bytes(), 32)...)
-	bytesToHash = append(bytesToHash, common.LeftPadBytes(value.Bytes(), 32)...)
-	bytesToHash = append(bytesToHash, data...)
-	id := common.BytesToHash(bytesToHash)
+	// Calculate id
+	tx := types.NewTx(&types.LegacyTx{
+		To:    to,
+		Nonce: nonce,
+		Value: value,
+		Data:  data,
+	})
+
+	id := tx.Hash()
 
 	// create monitored tx
 	mTx := monitoredTx{
 		id: id, from: from, to: to,
 		nonce: nonce, value: value, data: data,
 		gas: gas, gasPrice: gasPrice,
-		status: MonitoredTxStatusCreated,
+		status:  MonitoredTxStatusCreated,
+		history: make(map[common.Hash]bool),
 	}
 
 	// add to storage
@@ -111,7 +154,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int, da
 	return id, nil
 }
 
-// ResultsByStatus returns all the results for all the monitored txs related to the owner and matching the provided statuses
+// ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
 // if the statuses are empty, all the statuses are considered.
 //
 // the slice is returned is in order by created_at field ascending
@@ -261,7 +304,7 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			defer func(mTx monitoredTx, mTxLogger *log.Logger) {
 				if err := recover(); err != nil {
-					mTxLogger.Error("monitoring recovered from this err: %v", err)
+					mTxLogger.Errorf("monitoring recovered from this err: %v", err)
 				}
 				wg.Done()
 			}(mTx, mTxLogger)

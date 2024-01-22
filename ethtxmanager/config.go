@@ -2,6 +2,7 @@ package ethtxmanager
 
 import (
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -50,6 +51,7 @@ type Config struct {
 	// gas price margin factor: 20%
 	// max gas price limit: 110
 	// tx gas price = 110
-	MaxGasPriceLimit uint64         `mapstructure:"MaxGasPriceLimit"`
-	From             common.Address `mapstructure:"From"`
+	MaxGasPriceLimit uint64          `mapstructure:"MaxGasPriceLimit"`
+	From             common.Address  `mapstructure:"From"`
+	Etherman         etherman.Config `mapstructure:"Etherman"`
 }

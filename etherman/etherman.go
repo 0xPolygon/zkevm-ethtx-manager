@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
@@ -11,6 +13,7 @@ import (
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -29,7 +32,7 @@ type ethereumClient interface {
 	ethereum.ContractCaller
 	ethereum.GasEstimator
 	ethereum.GasPricer
-	// ethereum.LogFilterer
+	ethereum.PendingStateReader
 	ethereum.TransactionReader
 	ethereum.TransactionSender
 	bind.DeployBackend
@@ -126,6 +129,11 @@ func (etherMan *Client) CurrentNonce(ctx context.Context, account common.Address
 	return etherMan.EthClient.NonceAt(ctx, account, nil)
 }
 
+// PendingNonce returns the pending nonce for the provided account
+func (etherMan *Client) PendingNonce(ctx context.Context, account common.Address) (uint64, error) {
+	return etherMan.EthClient.PendingNonceAt(ctx, account)
+}
+
 // SuggestedGasPrice returns the suggest nonce for the network at the moment
 func (etherMan *Client) SuggestedGasPrice(ctx context.Context) (*big.Int, error) {
 	suggestedGasPrice := etherMan.GetL1GasPrice(ctx)
@@ -141,7 +149,6 @@ func (etherMan *Client) EstimateGas(ctx context.Context, from common.Address, to
 		From:  from,
 		To:    to,
 		Value: value,
-		Data:  data,
 	})
 }
 
@@ -198,4 +205,57 @@ func (etherMan *Client) getAuthByAddress(addr common.Address) (bind.TransactOpts
 		return bind.TransactOpts{}, ErrNotFound
 	}
 	return auth, nil
+}
+
+// AddOrReplaceAuth adds an authorization or replace an existent one to the same account
+func (etherMan *Client) AddOrReplaceAuth(auth bind.TransactOpts) error {
+	log.Infof("added or replaced authorization for address: %v", auth.From.String())
+	etherMan.auth[auth.From] = auth
+	return nil
+}
+
+// LoadAuthFromKeyStore loads an authorization from a key store file
+func (etherMan *Client) LoadAuthFromKeyStore(path, password string) (*bind.TransactOpts, error) {
+	auth, err := newAuthFromKeystore(path, password, etherMan.cfg.L1ChainID)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("loaded authorization for address: %v", auth.From.String())
+	etherMan.auth[auth.From] = auth
+	return &auth, nil
+}
+
+// newKeyFromKeystore creates an instance of a keystore key from a keystore file
+func newKeyFromKeystore(path, password string) (*keystore.Key, error) {
+	if path == "" && password == "" {
+		return nil, nil
+	}
+	keystoreEncrypted, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("decrypting key from: %v", path)
+	key, err := keystore.DecryptKey(keystoreEncrypted, password)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+// newAuthFromKeystore an authorization instance from a keystore file
+func newAuthFromKeystore(path, password string, chainID uint64) (bind.TransactOpts, error) {
+	log.Infof("reading key from: %v", path)
+	key, err := newKeyFromKeystore(path, password)
+	if err != nil {
+		return bind.TransactOpts{}, err
+	}
+	if key == nil {
+		return bind.TransactOpts{}, nil
+	}
+	auth, err := bind.NewKeyedTransactorWithChainID(key.PrivateKey, new(big.Int).SetUint64(chainID))
+	if err != nil {
+		return bind.TransactOpts{}, err
+	}
+	return *auth, nil
 }
