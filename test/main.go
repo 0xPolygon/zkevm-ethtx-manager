@@ -22,6 +22,7 @@ func main() {
 	config := ethtxmanager.Config{
 		FrequencyToMonitorTxs: types.Duration{Duration: 1 * time.Second},
 		WaitTxToBeMined:       types.Duration{Duration: 2 * time.Minute},
+		L1ConfirmationBlocks:  60,
 		PrivateKeys:           []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
 		ForcedGas:             0,
 		GasPriceMarginFactor:  1,

@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -27,7 +28,7 @@ var (
 )
 
 type ethereumClient interface {
-	// ethereum.ChainReader
+	ethereum.ChainReader
 	ethereum.ChainStateReader
 	ethereum.ContractCaller
 	ethereum.GasEstimator
@@ -89,6 +90,11 @@ func (etherMan *Client) GetTx(ctx context.Context, txHash common.Hash) (*types.T
 // GetTxReceipt function gets ethereum tx receipt
 func (etherMan *Client) GetTxReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	return etherMan.EthClient.TransactionReceipt(ctx, txHash)
+}
+
+// GetLatestBlockNumber gets the latest block number from the ethereum
+func (etherMan *Client) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
+	return etherMan.getBlockNumber(ctx, rpc.LatestBlockNumber)
 }
 
 // WaitTxToBeMined waits for an L1 tx to be mined. It will return error if the tx is reverted or timeout is exceeded
@@ -258,4 +264,13 @@ func newAuthFromKeystore(path, password string, chainID uint64) (bind.TransactOp
 		return bind.TransactOpts{}, err
 	}
 	return *auth, nil
+}
+
+// getBlockNumber gets the block header by the provided block number from the ethereum
+func (etherMan *Client) getBlockNumber(ctx context.Context, blockNumber rpc.BlockNumber) (uint64, error) {
+	header, err := etherMan.EthClient.HeaderByNumber(ctx, big.NewInt(int64(blockNumber)))
+	if err != nil || header == nil {
+		return 0, err
+	}
+	return header.Number.Uint64(), nil
 }

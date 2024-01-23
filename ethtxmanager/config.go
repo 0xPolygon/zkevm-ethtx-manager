@@ -12,6 +12,8 @@ type Config struct {
 	FrequencyToMonitorTxs types.Duration `mapstructure:"FrequencyToMonitorTxs"`
 	// WaitTxToBeMined time to wait after transaction was sent to the ethereum
 	WaitTxToBeMined types.Duration `mapstructure:"WaitTxToBeMined"`
+	// L1ConfirmationBlocks is the number of blocks to wait for a L1 tx to be confirmed
+	L1ConfirmationBlocks uint64 `mapstructure:"L1ConfirmationBlocks"`
 
 	// PrivateKeys defines all the key store files that are going
 	// to be read in order to provide the private keys to sign the L1 txs
@@ -51,7 +53,10 @@ type Config struct {
 	// gas price margin factor: 20%
 	// max gas price limit: 110
 	// tx gas price = 110
-	MaxGasPriceLimit uint64          `mapstructure:"MaxGasPriceLimit"`
-	From             common.Address  `mapstructure:"From"`
-	Etherman         etherman.Config `mapstructure:"Etherman"`
+	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
+
+	// Sender Address
+	From common.Address `mapstructure:"From"`
+	// Etherman configuration
+	Etherman etherman.Config `mapstructure:"Etherman"`
 }
