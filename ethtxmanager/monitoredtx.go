@@ -1,7 +1,6 @@
 package ethtxmanager
 
 import (
-	"encoding/hex"
 	"math/big"
 	"time"
 
@@ -10,7 +9,7 @@ import (
 )
 
 const (
-	// MonitoredTxStatusCreated mean the tx was just added to the storage
+	// MonitoredTxStatusCreated means the tx was just added to the storage
 	MonitoredTxStatusCreated = MonitoredTxStatus("created")
 
 	// MonitoredTxStatusSent means that at least a eth tx was sent to the network
@@ -46,14 +45,8 @@ func (s MonitoredTxStatus) String() string {
 // monitoredTx represents a set of information used to build tx
 // plus information to monitor if the transactions was sent successfully
 type monitoredTx struct {
-	// owner is the common identifier among all the monitored tx to identify who
-	// created this, it's a identification provided by the caller in order to be
-	// used in the future to query the monitored tx by the owner, this allows the
-	// caller to be free of implementing a persistence layer to monitor the txs
-	owner string
-
 	// id is the tx identifier controller by the caller
-	id string
+	id common.Hash
 
 	// sender of the tx, used to identify which private key should be used to sing the tx
 	from common.Address
@@ -122,6 +115,8 @@ func (mTx monitoredTx) AddHistory(tx *types.Transaction) error {
 	return nil
 }
 
+/*
+
 // toStringPtr returns the current to field as a string pointer
 func (mTx *monitoredTx) toStringPtr() *string {
 	var to *string
@@ -152,6 +147,7 @@ func (mTx *monitoredTx) dataStringPtr() *string {
 	return data
 }
 
+
 // historyStringSlice returns the current history field as a string slice
 func (mTx *monitoredTx) historyStringSlice() []string {
 	history := make([]string, 0, len(mTx.history))
@@ -160,6 +156,7 @@ func (mTx *monitoredTx) historyStringSlice() []string {
 	}
 	return history
 }
+*/
 
 // historyHashSlice returns the current history field as a string slice
 func (mTx *monitoredTx) historyHashSlice() []common.Hash {
@@ -170,6 +167,7 @@ func (mTx *monitoredTx) historyHashSlice() []common.Hash {
 	return history
 }
 
+/*
 // blockNumberU64Ptr returns the current blockNumber as a uint64 pointer
 func (mTx *monitoredTx) blockNumberU64Ptr() *uint64 {
 	var blockNumber *uint64
@@ -179,10 +177,11 @@ func (mTx *monitoredTx) blockNumberU64Ptr() *uint64 {
 	}
 	return blockNumber
 }
+*/
 
 // MonitoredTxResult represents the result of a execution of a monitored tx
 type MonitoredTxResult struct {
-	ID     string
+	ID     common.Hash
 	Status MonitoredTxStatus
 	Txs    map[common.Hash]TxResult
 }

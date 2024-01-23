@@ -2,7 +2,8 @@ package ethtxmanager
 
 import (
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/db"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Config is configuration for ethereum transaction manager
@@ -11,6 +12,8 @@ type Config struct {
 	FrequencyToMonitorTxs types.Duration `mapstructure:"FrequencyToMonitorTxs"`
 	// WaitTxToBeMined time to wait after transaction was sent to the ethereum
 	WaitTxToBeMined types.Duration `mapstructure:"WaitTxToBeMined"`
+	// L1ConfirmationBlocks is the number of blocks to wait for a L1 tx to be confirmed
+	L1ConfirmationBlocks uint64 `mapstructure:"L1ConfirmationBlocks"`
 
 	// PrivateKeys defines all the key store files that are going
 	// to be read in order to provide the private keys to sign the L1 txs
@@ -51,6 +54,9 @@ type Config struct {
 	// max gas price limit: 110
 	// tx gas price = 110
 	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
-	// DB is the database configuration
-	DB db.Config `mapstructure:"DB"`
+
+	// Sender Address
+	From common.Address `mapstructure:"From"`
+	// Etherman configuration
+	Etherman etherman.Config `mapstructure:"Etherman"`
 }

@@ -1,5 +1,3 @@
-include version.mk
-
 ARCH := $(shell arch)
 
 ifeq ($(ARCH),x86_64)
@@ -15,26 +13,11 @@ GOENVVARS := GOBIN=$(GOBIN) CGO_ENABLED=0 GOOS=linux GOARCH=$(ARCH)
 GOBINARY := zkevm-ethtx-manager
 GOCMD := $(GOBASE)/cmd
 
-LDFLAGS += -X 'github.com/0xPolygonHermez/zkevm-ethtx-manager.Version=$(VERSION)'
-LDFLAGS += -X 'github.com/0xPolygonHermez/zkevm-ethtx-manager=$(GITREV)'
-LDFLAGS += -X 'github.com/0xPolygonHermez/zkevm-ethtx-manager=$(GITBRANCH)'
-LDFLAGS += -X 'github.com/0xPolygonHermez/zkevm-ethtx-manager=$(DATE)'
-
 # Check dependencies
 # Check for Go
 .PHONY: check-go
 check-go:
 	@which go > /dev/null || (echo "Error: Go is not installed" && exit 1)
-
-# Check for Docker
-.PHONY: check-docker
-check-docker:
-	@which docker > /dev/null || (echo "Error: docker is not installed" && exit 1)
-
-# Check for Docker-compose
-.PHONY: check-docker-compose
-check-docker-compose:
-	@which docker-compose > /dev/null || (echo "Error: docker-compose is not installed" && exit 1)
 
 # Check for Curl
 .PHONY: check-curl
@@ -44,33 +27,7 @@ check-curl:
 # Targets that require the checks
 build: check-go
 lint: check-go
-build-docker: check-docker
-build-docker-nc: check-docker
-run: check-docker check-docker-compose
-stop: check-docker check-docker-compose
 install-linter: check-go check-curl
-
-.PHONY: build
-build: ## Builds the binary locally into ./dist
-	$(GOENVVARS) go build -ldflags "all=$(LDFLAGS)" -o $(GOBIN)/$(GOBINARY) $(GOCMD)
-
-.PHONY: build-docker
-build-docker: ## Builds a docker image with the binary
-	docker build -t zkevm-ethtx-manager -f ./Dockerfile .
-
-.PHONY: build-docker-nc
-build-docker-nc: ## Builds a docker image with the binary - but without build cache
-	docker build --no-cache=true -t zkevm-ethtx-manager -f ./Dockerfile .
-
-.PHONY: run-ethtxmanager
-run: ## Runs the eth tx manager
-	docker-compose up -d zkevm-ethtx-manager-db
-	sleep 2
-	docker-compose up -d zkevm-ethtx-manager
-
-.PHONY: stop
-stop: ## Stops all services
-	docker-compose down
 
 .PHONY: install-linter
 install-linter: ## Installs the linter
