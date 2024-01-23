@@ -31,5 +31,8 @@ Returns whether there are pending transactions to be mined in L1.
 - **Sent**: transaction was sent to L1
 - **Failed**: the tx was already mined and failed with an error that can't be recovered automatically, ex: the data in the tx is invalid and the tx gets reverted
 - **Confirmed**: the tx was already mined and the receipt status is Successful. Confirmation waits for the configured number of blocks to be considered final.
+
+#### Legacy statuses
+
 - **Reorged**: is used when a monitored tx was already confirmed but the L1 block where this tx was confirmed has been reorged, in this situation the caller needs to review this information and wait until it gets confirmed again in a future block.
 - **Done**: the tx was set by the owner as done
