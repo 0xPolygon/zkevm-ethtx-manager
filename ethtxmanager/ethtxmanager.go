@@ -156,8 +156,6 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
 // if the statuses are empty, all the statuses are considered.
-//
-// the slice is returned is in order by created_at field ascending
 func (c *Client) ResultsByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]MonitoredTxResult, error) {
 	mTxs, err := c.storage.GetByStatus(ctx, statuses)
 	if err != nil {

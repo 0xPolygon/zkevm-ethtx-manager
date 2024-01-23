@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// MonitoredTxStatusCreated mean the tx was just added to the storage
+	// MonitoredTxStatusCreated means the tx was just added to the storage
 	MonitoredTxStatusCreated = MonitoredTxStatus("created")
 
 	// MonitoredTxStatusSent means that at least a eth tx was sent to the network
