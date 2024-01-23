@@ -20,11 +20,6 @@ Result returns the current result of the transaction execution with all the deta
 ResultsByStatus returns all the results for all the monitored txs matching the provided statuses.
 If the statuses are empty, all the statuses are considered.
 
-### Pending L1 Transactions
-`func (c *Client) PendingL1Txs(ctx context.Context) (bool, error)`
-
-Returns whether there are pending transactions to be mined in L1.
-
 ### Transactions statuses
 
 - **Created**: the tx was just added to the volatile storage

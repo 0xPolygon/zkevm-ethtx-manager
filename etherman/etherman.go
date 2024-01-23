@@ -135,11 +135,6 @@ func (etherMan *Client) CurrentNonce(ctx context.Context, account common.Address
 	return etherMan.EthClient.NonceAt(ctx, account, nil)
 }
 
-// PendingNonce returns the pending nonce for the provided account
-func (etherMan *Client) PendingNonce(ctx context.Context, account common.Address) (uint64, error) {
-	return etherMan.EthClient.PendingNonceAt(ctx, account)
-}
-
 // SuggestedGasPrice returns the suggest nonce for the network at the moment
 func (etherMan *Client) SuggestedGasPrice(ctx context.Context) (*big.Int, error) {
 	suggestedGasPrice := etherMan.GetL1GasPrice(ctx)
