@@ -6,6 +6,7 @@ package ethtxmanager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -42,6 +43,20 @@ type Client struct {
 	storage  storageInterface
 }
 
+type pending struct {
+	Pending map[common.Address]map[uint64]l1Tx `json:"pending"`
+}
+
+type l1Tx struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Nonce    string `json:"nonce"`
+	GasPrice string `json:"gasPrice"`
+	Gas      string `json:"gas"`
+	Value    string `json:"value"`
+	Data     string `json:"input"`
+}
+
 // New creates new eth tx manager
 // func New(cfg Config, ethMan ethermanInterface, storage storageInterface, state stateInterface) *Client {
 func New(cfg Config) (*Client, error) {
@@ -69,18 +84,63 @@ func New(cfg Config) (*Client, error) {
 	return &client, nil
 }
 
-func (c *Client) PendingL1Txs(ctx context.Context) (bool, error) {
-	nonce, err := c.etherman.CurrentNonce(ctx, c.cfg.From)
+func pendingL1Txs(URL string, from common.Address) ([]monitoredTx, error) {
+	response, err := JSONRPCCall(URL, "txpool_content")
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	pendingNonce, err := c.etherman.PendingNonce(ctx, c.cfg.From)
+	// log.Debugf("txpool_content response: %v", string(response.Result))
+
+	var L1Txs pending
+	err = json.Unmarshal(response.Result, &L1Txs)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return nonce < pendingNonce, nil
+	var mTxs []monitoredTx
+	for _, tx := range L1Txs.Pending[from] {
+		if common.HexToAddress(tx.From) == from {
+			to := common.HexToAddress(tx.To)
+			nonce, ok := new(big.Int).SetString(tx.Nonce, 0)
+			if !ok {
+				return nil, fmt.Errorf("failed to convert nonce %v to big.Int", tx.Nonce)
+			}
+
+			value, ok := new(big.Int).SetString(tx.Value, 0)
+			if !ok {
+				return nil, fmt.Errorf("failed to convert value %v to big.Int", tx.Value)
+			}
+
+			gas, ok := new(big.Int).SetString(tx.Gas, 0)
+			if !ok {
+				return nil, fmt.Errorf("failed to convert gas %v to big.Int", tx.Gas)
+			}
+
+			gasPrice, ok := new(big.Int).SetString(tx.GasPrice, 0)
+			if !ok {
+				return nil, fmt.Errorf("failed to convert gasPrice %v to big.Int", tx.GasPrice)
+			}
+
+			data := common.Hex2Bytes(string(tx.Data))
+
+			mTx := monitoredTx{
+				id:       types.NewTx(&types.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
+				from:     common.HexToAddress(tx.From),
+				to:       &to,
+				nonce:    nonce.Uint64(),
+				value:    value,
+				data:     data,
+				gas:      gas.Uint64(),
+				gasPrice: gasPrice,
+				status:   MonitoredTxStatusSent,
+				history:  make(map[common.Hash]bool),
+			}
+			mTxs = append(mTxs, mTx)
+		}
+	}
+
+	return mTxs, nil
 }
 
 // Add a transaction to be sent and monitored
@@ -237,6 +297,21 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 // send then to the blockchain and keep monitoring them until they
 // get mined
 func (c *Client) Start() {
+	// Check L1 for pending txs
+	pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.cfg.From)
+	if err != nil {
+		log.Errorf("failed to get pending txs from L1: %v", err)
+	}
+
+	log.Infof("%d L1 pending Txs found", len(pendingTxs))
+
+	for _, mTx := range pendingTxs {
+		err := c.storage.Add(context.Background(), mTx)
+		if err != nil {
+			log.Errorf("failed to add pending tx to storage: %v", err)
+		}
+	}
+
 	// infinite loop to manage txs as they arrive
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
