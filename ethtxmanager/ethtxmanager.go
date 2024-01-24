@@ -102,22 +102,22 @@ func pendingL1Txs(URL string, from common.Address) ([]monitoredTx, error) {
 	for _, tx := range L1Txs.Pending[from] {
 		if common.HexToAddress(tx.From) == from {
 			to := common.HexToAddress(tx.To)
-			nonce, ok := new(big.Int).SetString(tx.Nonce, 16)
+			nonce, ok := new(big.Int).SetString(tx.Nonce, 0)
 			if !ok {
 				return nil, fmt.Errorf("failed to convert nonce %v to big.Int", tx.Nonce)
 			}
 
-			value, ok := new(big.Int).SetString(tx.Value, 16)
+			value, ok := new(big.Int).SetString(tx.Value, 0)
 			if !ok {
 				return nil, fmt.Errorf("failed to convert value %v to big.Int", tx.Value)
 			}
 
-			gas, ok := new(big.Int).SetString(tx.Gas, 16)
+			gas, ok := new(big.Int).SetString(tx.Gas, 0)
 			if !ok {
 				return nil, fmt.Errorf("failed to convert gas %v to big.Int", tx.Gas)
 			}
 
-			gasPrice, ok := new(big.Int).SetString(tx.GasPrice, 16)
+			gasPrice, ok := new(big.Int).SetString(tx.GasPrice, 0)
 			if !ok {
 				return nil, fmt.Errorf("failed to convert gasPrice %v to big.Int", tx.GasPrice)
 			}
