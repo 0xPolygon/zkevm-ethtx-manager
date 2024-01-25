@@ -30,11 +30,11 @@ func main() {
 		From:                  common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
+			HTTPHeaders:      map[string]string{},
 			MultiGasProvider: false,
 			L1ChainID:        1337,
 		},
 	}
-
 	log.Debug("Creating ethtxmanager")
 	client, err := ethtxmanager.New(config)
 	if err != nil {
@@ -44,13 +44,22 @@ func main() {
 
 	ctx := context.Background()
 
-	nonce := uint64(17)
+	// Get starting nonce
+	testEtherman, err := etherman.NewClient(config.Etherman)
+	if err != nil {
+		log.Fatalf("Error creating etherman client: %s", err)
+	}
+	nonce, err := testEtherman.CurrentNonce(ctx, config.From)
+	if err != nil {
+		log.Fatalf("Error getting nonce: %s", err)
+	}
+
 	go client.Start()
 	log.Debug("ethtxmanager started")
 	sendTransaction(ctx, client, nonce)
 	nonce++
 
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 10; i++ {
 		time.Sleep(100 * time.Millisecond)
 		sendTransaction(ctx, client, nonce)
 		nonce++

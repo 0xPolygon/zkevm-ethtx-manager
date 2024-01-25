@@ -40,7 +40,7 @@ func NewRPCClient(url string) *RPCClient {
 // JSONRPCCall executes a 2.0 JSON RPC HTTP Post Request to the provided URL with
 // the provided method and parameters, which is compatible with the Ethereum
 // JSON RPC Server.
-func JSONRPCCall(url, method string, parameters ...interface{}) (Response, error) {
+func JSONRPCCall(url, method string, httpHeaders map[string]string, parameters ...interface{}) (Response, error) {
 	params, err := json.Marshal(parameters)
 	if err != nil {
 		return Response{}, err
@@ -53,7 +53,7 @@ func JSONRPCCall(url, method string, parameters ...interface{}) (Response, error
 		Params:  params,
 	}
 
-	httpRes, err := sendJSONRPC_HTTPRequest(url, request)
+	httpRes, err := sendJSONRPC_HTTPRequest(url, request, httpHeaders)
 	if err != nil {
 		return Response{}, err
 	}
@@ -85,7 +85,7 @@ type BatchCall struct {
 // JSONRPCBatchCall executes a 2.0 JSON RPC HTTP Post Batch Request to the provided URL with
 // the provided method and parameters groups, which is compatible with the Ethereum
 // JSON RPC Server.
-func JSONRPCBatchCall(url string, calls ...BatchCall) ([]Response, error) {
+func JSONRPCBatchCall(url string, httpHeaders map[string]string, calls ...BatchCall) ([]Response, error) {
 	requests := []Request{}
 
 	for i, call := range calls {
@@ -104,7 +104,7 @@ func JSONRPCBatchCall(url string, calls ...BatchCall) ([]Response, error) {
 		requests = append(requests, req)
 	}
 
-	httpRes, err := sendJSONRPC_HTTPRequest(url, requests)
+	httpRes, err := sendJSONRPC_HTTPRequest(url, requests, httpHeaders)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func JSONRPCBatchCall(url string, calls ...BatchCall) ([]Response, error) {
 	return res, nil
 }
 
-func sendJSONRPC_HTTPRequest(url string, payload interface{}) (*http.Response, error) {
+func sendJSONRPC_HTTPRequest(url string, payload interface{}, httpHeaders map[string]string) (*http.Response, error) {
 	reqBody, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -142,6 +142,9 @@ func sendJSONRPC_HTTPRequest(url string, payload interface{}) (*http.Response, e
 	}
 
 	httpReq.Header.Add("Content-type", "application/json")
+	for key, value := range httpHeaders {
+		httpReq.Header.Add(key, value)
+	}
 
 	httpRes, err := http.DefaultClient.Do(httpReq)
 	if err != nil {

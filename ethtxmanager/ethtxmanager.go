@@ -84,13 +84,11 @@ func New(cfg Config) (*Client, error) {
 	return &client, nil
 }
 
-func pendingL1Txs(URL string, from common.Address) ([]monitoredTx, error) {
-	response, err := JSONRPCCall(URL, "txpool_content")
+func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string) ([]monitoredTx, error) {
+	response, err := JSONRPCCall(URL, "txpool_content", httpHeaders)
 	if err != nil {
 		return nil, err
 	}
-
-	// log.Debugf("txpool_content response: %v", string(response.Result))
 
 	var L1Txs pending
 	err = json.Unmarshal(response.Result, &L1Txs)
@@ -298,7 +296,7 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 // get mined
 func (c *Client) Start() {
 	// Check L1 for pending txs
-	pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.cfg.From)
+	pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.cfg.From, c.cfg.Etherman.HTTPHeaders)
 	if err != nil {
 		log.Errorf("failed to get pending txs from L1: %v", err)
 	}
