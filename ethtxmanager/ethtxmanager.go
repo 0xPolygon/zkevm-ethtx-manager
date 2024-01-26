@@ -723,7 +723,7 @@ func (c *Client) logErrorAndWait(msg string, err error) {
 // when processing monitored txs
 type ResultHandler func(MonitoredTxResult)
 
-// ProcessPendingMonitoredTxs will check all monitored txs of this owner
+// ProcessPendingMonitoredTxs will check all monitored txs
 // and wait until all of them are either confirmed or failed before continuing
 //
 // for the confirmed and failed ones, the resultHandler will be triggered
@@ -812,9 +812,8 @@ func createMonitoredTxLogger(mTx monitoredTx) *log.Logger {
 // fields already set for a monitoredTx without requiring an instance of
 // monitoredTx, this should be use in for callers before calling the ADD
 // method
-func CreateLogger(owner, monitoredTxId common.Hash, from common.Address, to *common.Address) *log.Logger {
+func CreateLogger(monitoredTxId common.Hash, from common.Address, to *common.Address) *log.Logger {
 	return log.WithFields(
-		"owner", owner,
 		"monitoredTxId", monitoredTxId.String(),
 		"from", from,
 		"to", to,
