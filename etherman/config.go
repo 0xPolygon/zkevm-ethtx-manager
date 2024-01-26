@@ -13,4 +13,6 @@ type Config struct {
 	Etherscan etherscan.Config
 	// L1ChainID is the chain ID of the L1
 	L1ChainID uint64 `mapstructure:"L1ChainID"`
+	// HTTPHeaders are the headers to be used in the HTTP requests
+	HTTPHeaders map[string]string `mapstructure:"HTTPHeaders"`
 }

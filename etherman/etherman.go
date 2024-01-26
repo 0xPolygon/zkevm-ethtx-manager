@@ -61,6 +61,10 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
+	for key, value := range cfg.HTTPHeaders {
+		ethClient.Client().SetHeader(key, value)
+	}
+
 	gProviders := []ethereum.GasPricer{ethClient}
 	if cfg.MultiGasProvider {
 		if cfg.Etherscan.ApiKey == "" {
