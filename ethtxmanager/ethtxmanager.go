@@ -164,6 +164,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	if err != nil {
 		err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
 		log.Error(err.Error())
+		log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", from.String(), to.String(), value.String())
 		if c.cfg.ForcedGas > 0 {
 			gas = c.cfg.ForcedGas
 		} else {
