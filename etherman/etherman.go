@@ -159,6 +159,7 @@ func (etherMan *Client) EstimateGas(ctx context.Context, from common.Address, to
 		From:  from,
 		To:    to,
 		Value: value,
+		Data:  data,
 	})
 }
 
