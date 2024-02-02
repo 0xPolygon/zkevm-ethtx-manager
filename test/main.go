@@ -75,15 +75,15 @@ func main() {
 
 		x := 0
 		for x < len(results) {
-			if results[x].Status != ethtxmanager.MonitoredTxStatusConfirmed {
-				log.Debugf("Tx %s not confirmed yet: %s", results[x].ID, results[x].Status)
+			if results[x].Status != ethtxmanager.MonitoredTxStatusMined {
+				log.Debugf("Tx %s not mined yet: %s", results[x].ID, results[x].Status)
 				break
 			}
 			x++
 		}
 
 		if x == len(results) {
-			log.Info("All txs confirmed")
+			log.Info("All txs mined")
 			break
 		}
 	}

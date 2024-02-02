@@ -247,12 +247,12 @@ func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult,
 // SetStatusDone sets the status of a monitored tx to MonitoredStatusDone.
 // this method is provided to the callers to decide when a monitored tx should be
 // considered done, so they can start to ignore it when querying it by Status.
-func (c *Client) setStatusDone(ctx context.Context, id common.Hash) error {
+func (c *Client) setStatusFinalized(ctx context.Context, id common.Hash) error {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	mTx.status = MonitoredTxStatusDone
+	mTx.status = MonitoredTxStatusFinalized
 	return c.storage.Update(ctx, mTx)
 }
 
@@ -284,9 +284,14 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 	}
 
 	result := MonitoredTxResult{
-		ID:     mTx.id,
-		Status: mTx.status,
-		Txs:    txs,
+		ID:                 mTx.id,
+		To:                 mTx.to,
+		Nonce:              mTx.nonce,
+		Value:              mTx.value,
+		Data:               mTx.data,
+		MinedAtBlockNumber: mTx.blockNumber,
+		Status:             mTx.status,
+		Txs:                txs,
 	}
 
 	return result, nil
@@ -332,35 +337,9 @@ func (c *Client) Stop() {
 	c.cancel()
 }
 
-// Reorg updates all monitored txs from provided block number until the last one to
-// Reorged status, allowing it to be reprocessed by the tx monitoring
-func (c *Client) Reorg(ctx context.Context, fromBlockNumber uint64) error {
-	log.Infof("processing reorg from block: %v", fromBlockNumber)
-	mTxs, err := c.storage.GetByBlock(ctx, &fromBlockNumber, nil)
-	if err != nil {
-		log.Errorf("failed to monitored tx by block: %v", err)
-		return err
-	}
-	log.Infof("updating %v monitored txs to reorged", len(mTxs))
-	for _, mTx := range mTxs {
-		mTxLogger := createMonitoredTxLogger(mTx)
-		mTx.blockNumber = nil
-		mTx.status = MonitoredTxStatusReorged
-
-		err = c.storage.Update(ctx, mTx)
-		if err != nil {
-			mTxLogger.Errorf("failed to update monitored tx to reorg status: %v", err)
-			return err
-		}
-		mTxLogger.Infof("monitored tx status updated to reorged")
-	}
-	log.Infof("reorg from block %v processed successfully", fromBlockNumber)
-	return nil
-}
-
 // monitorTxs process all pending monitored tx
 func (c *Client) monitorTxs(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent, MonitoredTxStatusReorged}
+	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent, MonitoredTxStatusMined}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to get created monitored txs: %v", err)
@@ -472,11 +451,6 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 
 	var signedTx *types.Transaction
 	if !confirmed {
-		// if is a reorged, move to the next
-		if mTx.status == MonitoredTxStatusReorged {
-			return
-		}
-
 		// review tx and increase gas and gas price if needed
 		if mTx.status == MonitoredTxStatusSent {
 			err := c.reviewMonitoredTx(ctx, &mTx, logger)
@@ -579,9 +553,9 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 		}
 
 		if lastReceiptChecked.BlockNumber.Uint64()+c.cfg.L1ConfirmationBlocks > currentBlockNumber {
-			mTx.status = MonitoredTxStatusConfirmed
+			mTx.status = MonitoredTxStatusMined
 			mTx.blockNumber = lastReceiptChecked.BlockNumber
-			logger.Info("confirmed")
+			logger.Info("mined")
 		} else if c.shouldContinueToMonitorThisTx(ctx, lastReceiptChecked) {
 			return
 		}
@@ -733,8 +707,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 		MonitoredTxStatusCreated,
 		MonitoredTxStatusSent,
 		MonitoredTxStatusFailed,
-		MonitoredTxStatusConfirmed,
-		MonitoredTxStatusReorged,
+		MonitoredTxStatusMined,
 	}
 	// keep running until there are pending monitored txs
 	for {
@@ -755,8 +728,8 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 			mTxResultLogger := CreateMonitoredTxResultLogger(result)
 
 			// if the result is confirmed, we set it as done do stop looking into this monitored tx
-			if result.Status == MonitoredTxStatusConfirmed {
-				err := c.setStatusDone(ctx, result.ID)
+			if result.Status == MonitoredTxStatusMined {
+				err := c.setStatusFinalized(ctx, result.ID)
 				if err != nil {
 					mTxResultLogger.Errorf("failed to set monitored tx as done, err: %v", err)
 					// if something goes wrong at this point, we skip this result and move to the next.
@@ -788,7 +761,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 				}
 
 				// if the result status is confirmed or failed, breaks the wait loop
-				if result.Status == MonitoredTxStatusConfirmed || result.Status == MonitoredTxStatusFailed {
+				if result.Status == MonitoredTxStatusMined || result.Status == MonitoredTxStatusFailed {
 					break
 				}
 

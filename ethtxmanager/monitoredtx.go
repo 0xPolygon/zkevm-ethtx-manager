@@ -20,18 +20,12 @@ const (
 	// and the tx gets reverted
 	MonitoredTxStatusFailed = MonitoredTxStatus("failed")
 
-	// MonitoredTxStatusConfirmed means the tx was already mined and the receipt
+	// MonitoredTxStatusMined means the tx was already mined and the receipt
 	// status is Successful
-	MonitoredTxStatusConfirmed = MonitoredTxStatus("confirmed")
+	MonitoredTxStatusMined = MonitoredTxStatus("mined")
 
-	// MonitoredTxStatusReorged is used when a monitored tx was already confirmed but
-	// the L1 block where this tx was confirmed has been reorged, in this situation
-	// the caller needs to review this information and wait until it gets confirmed
-	// again in a future block
-	MonitoredTxStatusReorged = MonitoredTxStatus("reorged")
-
-	// MonitoredTxStatusDone means the tx was set by the owner as done
-	MonitoredTxStatusDone = MonitoredTxStatus("done")
+	// MonitoredTxStatusFinalized means the tx was set by the owner as finalized
+	MonitoredTxStatusFinalized = MonitoredTxStatus("finalized")
 )
 
 // MonitoredTxStatus represents the status of a monitored tx
@@ -115,49 +109,6 @@ func (mTx monitoredTx) AddHistory(tx *types.Transaction) error {
 	return nil
 }
 
-/*
-
-// toStringPtr returns the current to field as a string pointer
-func (mTx *monitoredTx) toStringPtr() *string {
-	var to *string
-	if mTx.to != nil {
-		s := mTx.to.String()
-		to = &s
-	}
-	return to
-}
-
-// valueU64Ptr returns the current value field as a uint64 pointer
-func (mTx *monitoredTx) valueU64Ptr() *uint64 {
-	var value *uint64
-	if mTx.value != nil {
-		tmp := mTx.value.Uint64()
-		value = &tmp
-	}
-	return value
-}
-
-// dataStringPtr returns the current data field as a string pointer
-func (mTx *monitoredTx) dataStringPtr() *string {
-	var data *string
-	if mTx.data != nil {
-		tmp := hex.EncodeToString(mTx.data)
-		data = &tmp
-	}
-	return data
-}
-
-
-// historyStringSlice returns the current history field as a string slice
-func (mTx *monitoredTx) historyStringSlice() []string {
-	history := make([]string, 0, len(mTx.history))
-	for h := range mTx.history {
-		history = append(history, h.String())
-	}
-	return history
-}
-*/
-
 // historyHashSlice returns the current history field as a string slice
 func (mTx *monitoredTx) historyHashSlice() []common.Hash {
 	history := make([]common.Hash, 0, len(mTx.history))
@@ -167,23 +118,16 @@ func (mTx *monitoredTx) historyHashSlice() []common.Hash {
 	return history
 }
 
-/*
-// blockNumberU64Ptr returns the current blockNumber as a uint64 pointer
-func (mTx *monitoredTx) blockNumberU64Ptr() *uint64 {
-	var blockNumber *uint64
-	if mTx.blockNumber != nil {
-		tmp := mTx.blockNumber.Uint64()
-		blockNumber = &tmp
-	}
-	return blockNumber
-}
-*/
-
 // MonitoredTxResult represents the result of a execution of a monitored tx
 type MonitoredTxResult struct {
-	ID     common.Hash
-	Status MonitoredTxStatus
-	Txs    map[common.Hash]TxResult
+	ID                 common.Hash
+	To                 *common.Address
+	Nonce              uint64
+	Value              *big.Int
+	Data               []byte
+	MinedAtBlockNumber *big.Int
+	Status             MonitoredTxStatus
+	Txs                map[common.Hash]TxResult
 }
 
 // TxResult represents the result of a execution of a ethereum transaction in the block chain
