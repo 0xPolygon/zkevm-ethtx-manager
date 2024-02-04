@@ -328,6 +328,10 @@ func (c *Client) Start() {
 			if err != nil {
 				c.logErrorAndWait("failed to monitor txs: %v", err)
 			}
+			err = c.waitMinedTxTobeFinalized(context.Background())
+			if err != nil {
+				c.logErrorAndWait("failed to wait mined tx to be finalized: %v", err)
+			}
 		}
 	}
 }
@@ -339,7 +343,7 @@ func (c *Client) Stop() {
 
 // monitorTxs process all pending monitored tx
 func (c *Client) monitorTxs(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent, MonitoredTxStatusMined}
+	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to get created monitored txs: %v", err)
@@ -363,6 +367,37 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 		}(c, mTx)
 	}
 	wg.Wait()
+
+	return nil
+}
+
+// waitMinedTxTobeFinalized checks all mined monitored txs and wait the number of
+// l1 blocks configured to confirm the tx
+func (c *Client) waitMinedTxTobeFinalized(ctx context.Context) error {
+	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusMined}
+	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
+	if err != nil {
+		return fmt.Errorf("failed to get mined monitored txs: %v", err)
+	}
+
+	log.Infof("found %v mined monitored tx to process", len(mTxs))
+
+	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get latest block number: %v", err)
+	}
+
+	for _, mTx := range mTxs {
+		if mTx.blockNumber.Uint64()+c.cfg.L1ConfirmationBlocks <= currentBlockNumber {
+			mTxLogger := createMonitoredTxLogger(mTx)
+			mTxLogger.Infof("finalized")
+			mTx.status = MonitoredTxStatusFinalized
+			err := c.storage.Update(ctx, mTx)
+			if err != nil {
+				return fmt.Errorf("failed to update mined monitored tx: %v", err)
+			}
+		}
+	}
 
 	return nil
 }
@@ -433,21 +468,6 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			return
 		}
 	}
-
-	// if the history size reaches the max history size, this means something is really wrong with
-	// this Tx and we are not able to identify automatically, so we mark this as failed to let the
-	// caller know something is not right and needs to be review and to avoid to monitor this
-	// tx infinitely
-	// if len(mTx.history) == maxHistorySize {
-	// 	mTx.status = MonitoredTxStatusFailed
-	// 	mTxLogger.Infof("marked as failed because reached the history size limit: %v", err)
-	// 	// update monitored tx changes into storage
-	// 	err = c.storage.Update(ctx, mTx, nil)
-	// 	if err != nil {
-	// 		mTxLogger.Errorf("failed to update monitored tx when max history size limit reached: %v", err)
-	// 		continue
-	// 	}
-	// }
 
 	var signedTx *types.Transaction
 	if !confirmed {
@@ -545,21 +565,9 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 
 	// if mined, check receipt and mark as Failed or Confirmed
 	if lastReceiptChecked.Status == types.ReceiptStatusSuccessful {
-		// wait the number of l1 blocks configured to confirm the tx
-		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
-		if err != nil {
-			logger.Errorf("failed to get latest block number: %v", err)
-			return
-		}
-
-		if lastReceiptChecked.BlockNumber.Uint64()+c.cfg.L1ConfirmationBlocks > currentBlockNumber {
-			mTx.status = MonitoredTxStatusMined
-			mTx.blockNumber = lastReceiptChecked.BlockNumber
-			logger.Info("mined")
-		} else if c.shouldContinueToMonitorThisTx(ctx, lastReceiptChecked) {
-			return
-		}
-
+		mTx.status = MonitoredTxStatusMined
+		mTx.blockNumber = lastReceiptChecked.BlockNumber
+		logger.Info("mined")
 	} else {
 		// if we should continue to monitor, we move to the next one and this will
 		// be reviewed in the next monitoring cycle

@@ -22,12 +22,13 @@ func main() {
 	config := ethtxmanager.Config{
 		FrequencyToMonitorTxs: types.Duration{Duration: 1 * time.Second},
 		WaitTxToBeMined:       types.Duration{Duration: 2 * time.Minute},
-		L1ConfirmationBlocks:  60,
+		L1ConfirmationBlocks:  4,
 		PrivateKeys:           []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
 		ForcedGas:             0,
 		GasPriceMarginFactor:  1,
 		MaxGasPriceLimit:      0,
 		From:                  common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
+		PersistenceFilename:   "ethtxmanager-persisntece.json",
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
 			HTTPHeaders:      map[string]string{},
@@ -75,15 +76,15 @@ func main() {
 
 		x := 0
 		for x < len(results) {
-			if results[x].Status != ethtxmanager.MonitoredTxStatusMined {
-				log.Debugf("Tx %s not mined yet: %s", results[x].ID, results[x].Status)
+			if results[x].Status != ethtxmanager.MonitoredTxStatusFinalized {
+				log.Debugf("Tx %s not finalized yet: %s", results[x].ID, results[x].Status)
 				break
 			}
 			x++
 		}
 
 		if x == len(results) {
-			log.Info("All txs mined")
+			log.Info("All txs finalized")
 			break
 		}
 	}
