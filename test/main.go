@@ -28,7 +28,7 @@ func main() {
 		GasPriceMarginFactor:  1,
 		MaxGasPriceLimit:      0,
 		From:                  common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
-		PersistenceFilename:   "ethtxmanager-persisntece.json",
+		PersistenceFilename:   "ethtxmanager-persistence.json",
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
 			HTTPHeaders:      map[string]string{},

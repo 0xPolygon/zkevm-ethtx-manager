@@ -39,62 +39,62 @@ func (s MonitoredTxStatus) String() string {
 // monitoredTx represents a set of information used to build tx
 // plus information to monitor if the transactions was sent successfully
 type monitoredTx struct {
-	// id is the tx identifier controller by the caller
-	id common.Hash
+	// ID is the tx identifier controller by the caller
+	ID common.Hash `mapstructure:"id"`
 
 	// sender of the tx, used to identify which private key should be used to sing the tx
-	from common.Address
+	From common.Address `mapstructure:"from"`
 
 	// receiver of the tx
-	to *common.Address
+	To *common.Address `mapstructure:"to"`
 
-	// nonce used to create the tx
-	nonce uint64
+	// Nonce used to create the tx
+	Nonce uint64 `mapstructure:"nonce"`
 
-	// tx value
-	value *big.Int
+	// tx Value
+	Value *big.Int `mapstructure:"value"`
 
-	// tx data
-	data []byte
+	// tx Data
+	Data []byte `mapstructure:"data"`
 
-	// tx gas
-	gas uint64
+	// tx Gas
+	Gas uint64 `mapstructure:"gas"`
 
 	// tx gas offset
-	gasOffset uint64
+	GasOffset uint64 `mapstructure:"gasOffset"`
 
 	// tx gas price
-	gasPrice *big.Int
+	GasPrice *big.Int `mapstructure:"gasPrice"`
 
-	// status of this monitoring
-	status MonitoredTxStatus
+	// Status of this monitoring
+	Status MonitoredTxStatus `mapstructure:"status"`
 
-	// blockNumber represents the block where the tx was identified
+	// BlockNumber represents the block where the tx was identified
 	// to be mined, it's the same as the block number found in the
 	// tx receipt, this is used to control reorged monitored txs
-	blockNumber *big.Int
+	BlockNumber *big.Int `mapstructure:"blockNumber"`
 
-	// history represent all transaction hashes from
+	// History represent all transaction hashes from
 	// transactions created using this struct data and
 	// sent to the network
-	history map[common.Hash]bool
+	History map[common.Hash]bool `mapstructure:"history"`
 
-	// createdAt date time it was created
-	createdAt time.Time
+	// CreatedAt date time it was created
+	CreatedAt time.Time `mapstructure:"createdAt"`
 
-	// updatedAt last date time it was updated
-	updatedAt time.Time
+	// UpdatedAt last date time it was updated
+	UpdatedAt time.Time `mapstructure:"updatedAt"`
 }
 
 // Tx uses the current information to build a tx
 func (mTx monitoredTx) Tx() *types.Transaction {
 	tx := types.NewTx(&types.LegacyTx{
-		To:       mTx.to,
-		Nonce:    mTx.nonce,
-		Value:    mTx.value,
-		Data:     mTx.data,
-		Gas:      mTx.gas + mTx.gasOffset,
-		GasPrice: mTx.gasPrice,
+		To:       mTx.To,
+		Nonce:    mTx.Nonce,
+		Value:    mTx.Value,
+		Data:     mTx.Data,
+		Gas:      mTx.Gas + mTx.GasOffset,
+		GasPrice: mTx.GasPrice,
 	})
 
 	return tx
@@ -102,17 +102,17 @@ func (mTx monitoredTx) Tx() *types.Transaction {
 
 // AddHistory adds a transaction to the monitoring history
 func (mTx monitoredTx) AddHistory(tx *types.Transaction) error {
-	if _, found := mTx.history[tx.Hash()]; found {
+	if _, found := mTx.History[tx.Hash()]; found {
 		return ErrAlreadyExists
 	}
-	mTx.history[tx.Hash()] = true
+	mTx.History[tx.Hash()] = true
 	return nil
 }
 
 // historyHashSlice returns the current history field as a string slice
 func (mTx *monitoredTx) historyHashSlice() []common.Hash {
-	history := make([]common.Hash, 0, len(mTx.history))
-	for h := range mTx.history {
+	history := make([]common.Hash, 0, len(mTx.History))
+	for h := range mTx.History {
 		history = append(history, h)
 	}
 	return history

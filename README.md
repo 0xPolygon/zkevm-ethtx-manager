@@ -9,6 +9,11 @@ Adds a transaction to be sent to L1. The returned hash is calculated over the *t
 
 Parameter forcedNonce is optional, if nil is passed the current nonce is obtained from the L1 node.
 
+### Remove Transaction 
+`func (c *Client) Remove(ctx context.Context, id common.Hash) error `
+
+Removes a transaction. Should be called when a finalized transactions is not relevant any more.
+
 ### Get Transaction Status
 `func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult, error)`
 
