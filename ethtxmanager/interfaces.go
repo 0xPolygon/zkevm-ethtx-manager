@@ -26,6 +26,7 @@ type ethermanInterface interface {
 
 type storageInterface interface {
 	Add(ctx context.Context, mTx monitoredTx) error
+	Remove(ctx context.Context, id common.Hash) error
 	Get(ctx context.Context, id common.Hash) (monitoredTx, error)
 	GetByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]monitoredTx, error)
 	GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]monitoredTx, error)

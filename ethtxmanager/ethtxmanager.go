@@ -78,7 +78,7 @@ func New(cfg Config) (*Client, error) {
 	client := Client{
 		cfg:      cfg,
 		etherman: etherman,
-		storage:  NewMemStorage(),
+		storage:  NewMemStorage(cfg.PersistenceFilename),
 	}
 
 	return &client, nil
@@ -123,16 +123,16 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 			data := common.Hex2Bytes(string(tx.Data))
 
 			mTx := monitoredTx{
-				id:       types.NewTx(&types.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
-				from:     common.HexToAddress(tx.From),
-				to:       &to,
-				nonce:    nonce.Uint64(),
-				value:    value,
-				data:     data,
-				gas:      gas.Uint64(),
-				gasPrice: gasPrice,
-				status:   MonitoredTxStatusSent,
-				history:  make(map[common.Hash]bool),
+				ID:       types.NewTx(&types.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
+				From:     common.HexToAddress(tx.From),
+				To:       &to,
+				Nonce:    nonce.Uint64(),
+				Value:    value,
+				Data:     data,
+				Gas:      gas.Uint64(),
+				GasPrice: gasPrice,
+				Status:   MonitoredTxStatusSent,
+				History:  make(map[common.Hash]bool),
 			}
 			mTxs = append(mTxs, mTx)
 		}
@@ -192,11 +192,11 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 
 	// create monitored tx
 	mTx := monitoredTx{
-		id: id, from: from, to: to,
-		nonce: nonce, value: value, data: data,
-		gas: gas, gasPrice: gasPrice,
-		status:  MonitoredTxStatusCreated,
-		history: make(map[common.Hash]bool),
+		ID: id, From: from, To: to,
+		Nonce: nonce, Value: value, Data: data,
+		Gas: gas, GasPrice: gasPrice,
+		Status:  MonitoredTxStatusCreated,
+		History: make(map[common.Hash]bool),
 	}
 
 	// add to storage
@@ -207,10 +207,15 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		return common.Hash{}, err
 	}
 
-	mTxLog := log.WithFields("monitoredTx", mTx.id, "createdAt", mTx.createdAt)
+	mTxLog := log.WithFields("monitoredTx", mTx.ID, "createdAt", mTx.CreatedAt)
 	mTxLog.Infof("created")
 
 	return id, nil
+}
+
+// Remove a transaction from the monitored txs
+func (c *Client) Remove(ctx context.Context, id common.Hash) error {
+	return c.storage.Remove(ctx, id)
 }
 
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
@@ -247,12 +252,12 @@ func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult,
 // SetStatusDone sets the status of a monitored tx to MonitoredStatusDone.
 // this method is provided to the callers to decide when a monitored tx should be
 // considered done, so they can start to ignore it when querying it by Status.
-func (c *Client) setStatusDone(ctx context.Context, id common.Hash) error {
+func (c *Client) setStatusFinalized(ctx context.Context, id common.Hash) error {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	mTx.status = MonitoredTxStatusDone
+	mTx.Status = MonitoredTxStatusFinalized
 	return c.storage.Update(ctx, mTx)
 }
 
@@ -284,9 +289,14 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 	}
 
 	result := MonitoredTxResult{
-		ID:     mTx.id,
-		Status: mTx.status,
-		Txs:    txs,
+		ID:                 mTx.ID,
+		To:                 mTx.To,
+		Nonce:              mTx.Nonce,
+		Value:              mTx.Value,
+		Data:               mTx.Data,
+		MinedAtBlockNumber: mTx.BlockNumber,
+		Status:             mTx.Status,
+		Txs:                txs,
 	}
 
 	return result, nil
@@ -296,18 +306,20 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 // send then to the blockchain and keep monitoring them until they
 // get mined
 func (c *Client) Start() {
-	// Check L1 for pending txs
-	pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.cfg.From, c.cfg.Etherman.HTTPHeaders)
-	if err != nil {
-		log.Errorf("failed to get pending txs from L1: %v", err)
-	}
-
-	log.Infof("%d L1 pending Txs found", len(pendingTxs))
-
-	for _, mTx := range pendingTxs {
-		err := c.storage.Add(context.Background(), mTx)
+	// If no persistence file is uses check L1 for pending txs
+	if c.cfg.PersistenceFilename == "" {
+		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.cfg.From, c.cfg.Etherman.HTTPHeaders)
 		if err != nil {
-			log.Errorf("failed to add pending tx to storage: %v", err)
+			log.Errorf("failed to get pending txs from L1: %v", err)
+		}
+
+		log.Infof("%d L1 pending Txs found", len(pendingTxs))
+
+		for _, mTx := range pendingTxs {
+			err := c.storage.Add(context.Background(), mTx)
+			if err != nil {
+				log.Errorf("failed to add pending tx to storage: %v", err)
+			}
 		}
 	}
 
@@ -323,6 +335,10 @@ func (c *Client) Start() {
 			if err != nil {
 				c.logErrorAndWait("failed to monitor txs: %v", err)
 			}
+			err = c.waitMinedTxTobeFinalized(context.Background())
+			if err != nil {
+				c.logErrorAndWait("failed to wait mined tx to be finalized: %v", err)
+			}
 		}
 	}
 }
@@ -332,35 +348,9 @@ func (c *Client) Stop() {
 	c.cancel()
 }
 
-// Reorg updates all monitored txs from provided block number until the last one to
-// Reorged status, allowing it to be reprocessed by the tx monitoring
-func (c *Client) Reorg(ctx context.Context, fromBlockNumber uint64) error {
-	log.Infof("processing reorg from block: %v", fromBlockNumber)
-	mTxs, err := c.storage.GetByBlock(ctx, &fromBlockNumber, nil)
-	if err != nil {
-		log.Errorf("failed to monitored tx by block: %v", err)
-		return err
-	}
-	log.Infof("updating %v monitored txs to reorged", len(mTxs))
-	for _, mTx := range mTxs {
-		mTxLogger := createMonitoredTxLogger(mTx)
-		mTx.blockNumber = nil
-		mTx.status = MonitoredTxStatusReorged
-
-		err = c.storage.Update(ctx, mTx)
-		if err != nil {
-			mTxLogger.Errorf("failed to update monitored tx to reorg status: %v", err)
-			return err
-		}
-		mTxLogger.Infof("monitored tx status updated to reorged")
-	}
-	log.Infof("reorg from block %v processed successfully", fromBlockNumber)
-	return nil
-}
-
 // monitorTxs process all pending monitored tx
 func (c *Client) monitorTxs(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent, MonitoredTxStatusReorged}
+	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to get created monitored txs: %v", err)
@@ -388,6 +378,37 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 	return nil
 }
 
+// waitMinedTxTobeFinalized checks all mined monitored txs and wait the number of
+// l1 blocks configured to confirm the tx
+func (c *Client) waitMinedTxTobeFinalized(ctx context.Context) error {
+	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusMined}
+	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
+	if err != nil {
+		return fmt.Errorf("failed to get mined monitored txs: %v", err)
+	}
+
+	log.Infof("found %v mined monitored tx to process", len(mTxs))
+
+	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get latest block number: %v", err)
+	}
+
+	for _, mTx := range mTxs {
+		if mTx.BlockNumber.Uint64()+c.cfg.L1ConfirmationBlocks <= currentBlockNumber {
+			mTxLogger := createMonitoredTxLogger(mTx)
+			mTxLogger.Infof("finalized")
+			mTx.Status = MonitoredTxStatusFinalized
+			err := c.storage.Update(ctx, mTx)
+			if err != nil {
+				return fmt.Errorf("failed to update mined monitored tx: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // monitorTx does all the monitoring steps to the monitored tx
 func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Logger) {
 	var err error
@@ -402,7 +423,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 	// all history txs are considered mined until we can't find a receipt for any
 	// tx in the monitored tx history
 	allHistoryTxsWereMined := true
-	for txHash := range mTx.history {
+	for txHash := range mTx.History {
 		mined, receipt, err := c.etherman.CheckTxWasMined(ctx, txHash)
 		if err != nil {
 			logger.Errorf("failed to check if tx %v was mined: %v", txHash.String(), err)
@@ -455,30 +476,10 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 		}
 	}
 
-	// if the history size reaches the max history size, this means something is really wrong with
-	// this Tx and we are not able to identify automatically, so we mark this as failed to let the
-	// caller know something is not right and needs to be review and to avoid to monitor this
-	// tx infinitely
-	// if len(mTx.history) == maxHistorySize {
-	// 	mTx.status = MonitoredTxStatusFailed
-	// 	mTxLogger.Infof("marked as failed because reached the history size limit: %v", err)
-	// 	// update monitored tx changes into storage
-	// 	err = c.storage.Update(ctx, mTx, nil)
-	// 	if err != nil {
-	// 		mTxLogger.Errorf("failed to update monitored tx when max history size limit reached: %v", err)
-	// 		continue
-	// 	}
-	// }
-
 	var signedTx *types.Transaction
 	if !confirmed {
-		// if is a reorged, move to the next
-		if mTx.status == MonitoredTxStatusReorged {
-			return
-		}
-
 		// review tx and increase gas and gas price if needed
-		if mTx.status == MonitoredTxStatusSent {
+		if mTx.Status == MonitoredTxStatusSent {
 			err := c.reviewMonitoredTx(ctx, &mTx, logger)
 			if err != nil {
 				logger.Errorf("failed to review monitored tx: %v", err)
@@ -496,7 +497,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 		logger.Debugf("unsigned tx %v created", tx.Hash().String())
 
 		// sign tx
-		signedTx, err = c.etherman.SignTx(ctx, mTx.from, tx)
+		signedTx, err = c.etherman.SignTx(ctx, mTx.From, tx)
 		if err != nil {
 			logger.Errorf("failed to sign tx %v: %v", tx.Hash().String(), err)
 			return
@@ -531,10 +532,10 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 				return
 			}
 			logger.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
-			if mTx.status == MonitoredTxStatusCreated {
+			if mTx.Status == MonitoredTxStatusCreated {
 				// update tx status to sent
-				mTx.status = MonitoredTxStatusSent
-				logger.Debugf("status changed to %v", string(mTx.status))
+				mTx.Status = MonitoredTxStatusSent
+				logger.Debugf("status changed to %v", string(mTx.Status))
 				// update monitored tx changes into storage
 				err = c.storage.Update(ctx, mTx)
 				if err != nil {
@@ -571,21 +572,9 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 
 	// if mined, check receipt and mark as Failed or Confirmed
 	if lastReceiptChecked.Status == types.ReceiptStatusSuccessful {
-		// wait the number of l1 blocks configured to confirm the tx
-		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
-		if err != nil {
-			logger.Errorf("failed to get latest block number: %v", err)
-			return
-		}
-
-		if lastReceiptChecked.BlockNumber.Uint64()+c.cfg.L1ConfirmationBlocks > currentBlockNumber {
-			mTx.status = MonitoredTxStatusConfirmed
-			mTx.blockNumber = lastReceiptChecked.BlockNumber
-			logger.Info("confirmed")
-		} else if c.shouldContinueToMonitorThisTx(ctx, lastReceiptChecked) {
-			return
-		}
-
+		mTx.Status = MonitoredTxStatusMined
+		mTx.BlockNumber = lastReceiptChecked.BlockNumber
+		logger.Info("mined")
 	} else {
 		// if we should continue to monitor, we move to the next one and this will
 		// be reviewed in the next monitoring cycle
@@ -593,8 +582,8 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			return
 		}
 		// otherwise we understand this monitored tx has failed
-		mTx.status = MonitoredTxStatusFailed
-		mTx.blockNumber = lastReceiptChecked.BlockNumber
+		mTx.Status = MonitoredTxStatusFailed
+		mTx.BlockNumber = lastReceiptChecked.BlockNumber
 		logger.Info("failed")
 	}
 
@@ -638,7 +627,7 @@ func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt type
 func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLogger *log.Logger) error {
 	mTxLogger.Debug("reviewing")
 	// get gas
-	gas, err := c.etherman.EstimateGas(ctx, mTx.from, mTx.to, mTx.value, mTx.data)
+	gas, err := c.etherman.EstimateGas(ctx, mTx.From, mTx.To, mTx.Value, mTx.Data)
 	if err != nil {
 		err := fmt.Errorf("failed to estimate gas: %w", err)
 		mTxLogger.Errorf(err.Error())
@@ -646,9 +635,9 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 	}
 
 	// check gas
-	if gas > mTx.gas {
-		mTxLogger.Infof("monitored tx gas updated from %v to %v", mTx.gas, gas)
-		mTx.gas = gas
+	if gas > mTx.Gas {
+		mTxLogger.Infof("monitored tx gas updated from %v to %v", mTx.Gas, gas)
+		mTx.Gas = gas
 	}
 
 	// get gas price
@@ -660,9 +649,9 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 	}
 
 	// check gas price
-	if gasPrice.Cmp(mTx.gasPrice) == 1 {
-		mTxLogger.Infof("monitored tx gas price updated from %v to %v", mTx.gasPrice.String(), gasPrice.String())
-		mTx.gasPrice = gasPrice
+	if gasPrice.Cmp(mTx.GasPrice) == 1 {
+		mTxLogger.Infof("monitored tx gas price updated from %v to %v", mTx.GasPrice.String(), gasPrice.String())
+		mTx.GasPrice = gasPrice
 	}
 	return nil
 }
@@ -675,16 +664,16 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 // causing possible side effects and wasting resources.
 func (c *Client) reviewMonitoredTxNonce(ctx context.Context, mTx *monitoredTx, mTxLogger *log.Logger) error {
 	mTxLogger.Debug("reviewing nonce")
-	nonce, err := c.etherman.CurrentNonce(ctx, mTx.from)
+	nonce, err := c.etherman.CurrentNonce(ctx, mTx.From)
 	if err != nil {
-		err := fmt.Errorf("failed to load current nonce for acc %v: %w", mTx.from.String(), err)
+		err := fmt.Errorf("failed to load current nonce for acc %v: %w", mTx.From.String(), err)
 		mTxLogger.Errorf(err.Error())
 		return err
 	}
 
-	if nonce > mTx.nonce {
-		mTxLogger.Infof("monitored tx nonce updated from %v to %v", mTx.nonce, nonce)
-		mTx.nonce = nonce
+	if nonce > mTx.Nonce {
+		mTxLogger.Infof("monitored tx nonce updated from %v to %v", mTx.Nonce, nonce)
+		mTx.Nonce = nonce
 	}
 
 	return nil
@@ -733,8 +722,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 		MonitoredTxStatusCreated,
 		MonitoredTxStatusSent,
 		MonitoredTxStatusFailed,
-		MonitoredTxStatusConfirmed,
-		MonitoredTxStatusReorged,
+		MonitoredTxStatusMined,
 	}
 	// keep running until there are pending monitored txs
 	for {
@@ -755,8 +743,8 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 			mTxResultLogger := CreateMonitoredTxResultLogger(result)
 
 			// if the result is confirmed, we set it as done do stop looking into this monitored tx
-			if result.Status == MonitoredTxStatusConfirmed {
-				err := c.setStatusDone(ctx, result.ID)
+			if result.Status == MonitoredTxStatusMined {
+				err := c.setStatusFinalized(ctx, result.ID)
 				if err != nil {
 					mTxResultLogger.Errorf("failed to set monitored tx as done, err: %v", err)
 					// if something goes wrong at this point, we skip this result and move to the next.
@@ -788,7 +776,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 				}
 
 				// if the result status is confirmed or failed, breaks the wait loop
-				if result.Status == MonitoredTxStatusConfirmed || result.Status == MonitoredTxStatusFailed {
+				if result.Status == MonitoredTxStatusMined || result.Status == MonitoredTxStatusFailed {
 					break
 				}
 
@@ -802,10 +790,10 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 // fields already set for a monitoredTx
 func createMonitoredTxLogger(mTx monitoredTx) *log.Logger {
 	return log.WithFields(
-		"monitoredTxId", mTx.id,
-		"createdAt", mTx.createdAt,
-		"from", mTx.from,
-		"to", mTx.to,
+		"monitoredTxId", mTx.ID,
+		"createdAt", mTx.CreatedAt,
+		"from", mTx.From,
+		"to", mTx.To,
 	)
 }
 

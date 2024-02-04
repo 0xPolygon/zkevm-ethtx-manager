@@ -2,35 +2,89 @@ package ethtxmanager
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // MemStorage hold txs to be managed
 type MemStorage struct {
-	TxsMutex     sync.RWMutex
-	Transactions map[common.Hash]monitoredTx
+	TxsMutex            sync.RWMutex
+	Transactions        map[common.Hash]monitoredTx
+	PersistenceFilename string
 }
 
-// NewPostgresStorage creates a new instance of storage that use
-// postgres to store data
-func NewMemStorage() *MemStorage {
+// NewPostgresStorage creates a new instance of storage
+func NewMemStorage(persistenceFilename string) *MemStorage {
+	transactions := make(map[common.Hash]monitoredTx)
+	if persistenceFilename != "" {
+		// Check if the file exists
+		if _, err := os.Stat(persistenceFilename); os.IsNotExist(err) {
+			log.Warnf("Persistence file %s does not exist", persistenceFilename)
+		} else {
+			ReadFile, err := os.ReadFile(persistenceFilename)
+			if err != nil {
+				log.Error(err)
+				os.Exit(1)
+			}
+			err = json.Unmarshal(ReadFile, &transactions)
+			if err != nil {
+				log.Error(err)
+				os.Exit(1)
+			}
+			log.Infof("Persistence file %s loaded", persistenceFilename)
+		}
+	}
+
 	return &MemStorage{TxsMutex: sync.RWMutex{},
-		Transactions: make(map[common.Hash]monitoredTx),
+		Transactions:        transactions,
+		PersistenceFilename: persistenceFilename,
+	}
+}
+
+// Persist the memory storage
+func (s *MemStorage) persist() {
+	if s.PersistenceFilename != "" {
+		s.TxsMutex.RLock()
+		defer s.TxsMutex.RUnlock()
+		jsonFile, _ := json.Marshal(s.Transactions)
+		err := os.WriteFile(s.PersistenceFilename+".tmp", jsonFile, 0644) // nolint:gosec, gomnd
+		if err != nil {
+			log.Error(err)
+		}
+		err = os.Rename(s.PersistenceFilename+".tmp", s.PersistenceFilename)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 }
 
 // Add persist a monitored tx
 func (s *MemStorage) Add(ctx context.Context, mTx monitoredTx) error {
-	mTx.createdAt = time.Now()
+	mTx.CreatedAt = time.Now()
 	s.TxsMutex.Lock()
-	defer s.TxsMutex.Unlock()
-	if _, exists := s.Transactions[mTx.id]; exists {
+	if _, exists := s.Transactions[mTx.ID]; exists {
 		return ErrAlreadyExists
 	}
-	s.Transactions[mTx.id] = mTx
+	s.Transactions[mTx.ID] = mTx
+	s.TxsMutex.Unlock()
+	s.persist()
+	return nil
+}
+
+// Remove a persisted monitored tx
+func (s *MemStorage) Remove(ctx context.Context, id common.Hash) error {
+	s.TxsMutex.Lock()
+	if _, exists := s.Transactions[id]; !exists {
+		return ErrNotFound
+	}
+	delete(s.Transactions, id)
+	s.TxsMutex.Unlock()
+	s.persist()
 	return nil
 }
 
@@ -48,10 +102,11 @@ func (s *MemStorage) Get(ctx context.Context, id common.Hash) (monitoredTx, erro
 func (s *MemStorage) GetByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]monitoredTx, error) {
 	mTxs := []monitoredTx{}
 	s.TxsMutex.RLock()
+	defer s.TxsMutex.RUnlock()
 	for _, mTx := range s.Transactions {
 		if len(statuses) > 0 {
 			for _, status := range statuses {
-				if mTx.status == status {
+				if mTx.Status == status {
 					mTxs = append(mTxs, mTx)
 				}
 			}
@@ -59,8 +114,6 @@ func (s *MemStorage) GetByStatus(ctx context.Context, statuses []MonitoredTxStat
 			mTxs = append(mTxs, mTx)
 		}
 	}
-	defer s.TxsMutex.RUnlock()
-
 	return mTxs, nil
 }
 
@@ -69,27 +122,29 @@ func (s *MemStorage) GetByStatus(ctx context.Context, statuses []MonitoredTxStat
 func (s *MemStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]monitoredTx, error) {
 	mTxs := []monitoredTx{}
 	s.TxsMutex.RLock()
+	defer s.TxsMutex.RUnlock()
 	for _, mTx := range s.Transactions {
-		if fromBlock != nil && mTx.blockNumber.Uint64() < *fromBlock {
+		if fromBlock != nil && mTx.BlockNumber.Uint64() < *fromBlock {
 			continue
 		}
-		if toBlock != nil && mTx.blockNumber.Uint64() > *toBlock {
+		if toBlock != nil && mTx.BlockNumber.Uint64() > *toBlock {
 			continue
 		}
 		mTxs = append(mTxs, mTx)
 	}
-	s.TxsMutex.RUnlock()
 	return mTxs, nil
 }
 
 // Update a persisted monitored tx
 func (s *MemStorage) Update(ctx context.Context, mTx monitoredTx) error {
-	mTx.updatedAt = time.Now()
+	mTx.UpdatedAt = time.Now()
 	s.TxsMutex.Lock()
-	defer s.TxsMutex.Unlock()
-	if _, exists := s.Transactions[mTx.id]; !exists {
+
+	if _, exists := s.Transactions[mTx.ID]; !exists {
 		return ErrNotFound
 	}
-	s.Transactions[mTx.id] = mTx
+	s.Transactions[mTx.ID] = mTx
+	s.TxsMutex.Unlock()
+	s.persist()
 	return nil
 }

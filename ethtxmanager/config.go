@@ -54,9 +54,10 @@ type Config struct {
 	// max gas price limit: 110
 	// tx gas price = 110
 	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
-
 	// Sender Address
 	From common.Address `mapstructure:"From"`
+	// PersistenceFilename is the filename to store the memory storage
+	PersistenceFilename string `mapstructure:"PersistenceFilename"`
 	// Etherman configuration
 	Etherman etherman.Config `mapstructure:"Etherman"`
 }

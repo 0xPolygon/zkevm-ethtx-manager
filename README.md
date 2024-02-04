@@ -1,5 +1,5 @@
 # zkevm-ethtx-manager
-Stateless manager to sent transactions to L1.
+Stateless manager to send transactions to L1.
 
 ## Main Funtions
 ### Add Transaction
@@ -8,6 +8,11 @@ Stateless manager to sent transactions to L1.
 Adds a transaction to be sent to L1. The returned hash is calculated over the *to*, *nonce*, *value* and *data* fields.
 
 Parameter forcedNonce is optional, if nil is passed the current nonce is obtained from the L1 node.
+
+### Remove Transaction 
+`func (c *Client) Remove(ctx context.Context, id common.Hash) error `
+
+Removes a transaction. Should be called when a finalized transactions is not relevant any more.
 
 ### Get Transaction Status
 `func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult, error)`
@@ -25,9 +30,5 @@ If the statuses are empty, all the statuses are considered.
 - **Created**: the tx was just added to the volatile storage
 - **Sent**: transaction was sent to L1
 - **Failed**: the tx was already mined and failed with an error that can't be recovered automatically, ex: the data in the tx is invalid and the tx gets reverted
-- **Confirmed**: the tx was already mined and the receipt status is Successful. Confirmation waits for the configured number of blocks to be considered final.
-
-#### Legacy statuses
-
-- **Reorged**: is used when a monitored tx was already confirmed but the L1 block where this tx was confirmed has been reorged, in this situation the caller needs to review this information and wait until it gets confirmed again in a future block.
-- **Done**: the tx was set by the owner as done
+- **Mined**: the tx was already mined and the receipt status is Successful.
+- **Finalized**: The tx was mined before the configured number of confirmation blocks.

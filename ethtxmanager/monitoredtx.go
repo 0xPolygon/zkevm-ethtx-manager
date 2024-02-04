@@ -20,18 +20,12 @@ const (
 	// and the tx gets reverted
 	MonitoredTxStatusFailed = MonitoredTxStatus("failed")
 
-	// MonitoredTxStatusConfirmed means the tx was already mined and the receipt
+	// MonitoredTxStatusMined means the tx was already mined and the receipt
 	// status is Successful
-	MonitoredTxStatusConfirmed = MonitoredTxStatus("confirmed")
+	MonitoredTxStatusMined = MonitoredTxStatus("mined")
 
-	// MonitoredTxStatusReorged is used when a monitored tx was already confirmed but
-	// the L1 block where this tx was confirmed has been reorged, in this situation
-	// the caller needs to review this information and wait until it gets confirmed
-	// again in a future block
-	MonitoredTxStatusReorged = MonitoredTxStatus("reorged")
-
-	// MonitoredTxStatusDone means the tx was set by the owner as done
-	MonitoredTxStatusDone = MonitoredTxStatus("done")
+	// MonitoredTxStatusFinalized means the tx was set by the owner as finalized
+	MonitoredTxStatusFinalized = MonitoredTxStatus("finalized")
 )
 
 // MonitoredTxStatus represents the status of a monitored tx
@@ -45,62 +39,62 @@ func (s MonitoredTxStatus) String() string {
 // monitoredTx represents a set of information used to build tx
 // plus information to monitor if the transactions was sent successfully
 type monitoredTx struct {
-	// id is the tx identifier controller by the caller
-	id common.Hash
+	// ID is the tx identifier controller by the caller
+	ID common.Hash `mapstructure:"id"`
 
 	// sender of the tx, used to identify which private key should be used to sing the tx
-	from common.Address
+	From common.Address `mapstructure:"from"`
 
 	// receiver of the tx
-	to *common.Address
+	To *common.Address `mapstructure:"to"`
 
-	// nonce used to create the tx
-	nonce uint64
+	// Nonce used to create the tx
+	Nonce uint64 `mapstructure:"nonce"`
 
-	// tx value
-	value *big.Int
+	// tx Value
+	Value *big.Int `mapstructure:"value"`
 
-	// tx data
-	data []byte
+	// tx Data
+	Data []byte `mapstructure:"data"`
 
-	// tx gas
-	gas uint64
+	// tx Gas
+	Gas uint64 `mapstructure:"gas"`
 
 	// tx gas offset
-	gasOffset uint64
+	GasOffset uint64 `mapstructure:"gasOffset"`
 
 	// tx gas price
-	gasPrice *big.Int
+	GasPrice *big.Int `mapstructure:"gasPrice"`
 
-	// status of this monitoring
-	status MonitoredTxStatus
+	// Status of this monitoring
+	Status MonitoredTxStatus `mapstructure:"status"`
 
-	// blockNumber represents the block where the tx was identified
+	// BlockNumber represents the block where the tx was identified
 	// to be mined, it's the same as the block number found in the
 	// tx receipt, this is used to control reorged monitored txs
-	blockNumber *big.Int
+	BlockNumber *big.Int `mapstructure:"blockNumber"`
 
-	// history represent all transaction hashes from
+	// History represent all transaction hashes from
 	// transactions created using this struct data and
 	// sent to the network
-	history map[common.Hash]bool
+	History map[common.Hash]bool `mapstructure:"history"`
 
-	// createdAt date time it was created
-	createdAt time.Time
+	// CreatedAt date time it was created
+	CreatedAt time.Time `mapstructure:"createdAt"`
 
-	// updatedAt last date time it was updated
-	updatedAt time.Time
+	// UpdatedAt last date time it was updated
+	UpdatedAt time.Time `mapstructure:"updatedAt"`
 }
 
 // Tx uses the current information to build a tx
 func (mTx monitoredTx) Tx() *types.Transaction {
 	tx := types.NewTx(&types.LegacyTx{
-		To:       mTx.to,
-		Nonce:    mTx.nonce,
-		Value:    mTx.value,
-		Data:     mTx.data,
-		Gas:      mTx.gas + mTx.gasOffset,
-		GasPrice: mTx.gasPrice,
+		To:       mTx.To,
+		Nonce:    mTx.Nonce,
+		Value:    mTx.Value,
+		Data:     mTx.Data,
+		Gas:      mTx.Gas + mTx.GasOffset,
+		GasPrice: mTx.GasPrice,
 	})
 
 	return tx
@@ -108,82 +102,32 @@ func (mTx monitoredTx) Tx() *types.Transaction {
 
 // AddHistory adds a transaction to the monitoring history
 func (mTx monitoredTx) AddHistory(tx *types.Transaction) error {
-	if _, found := mTx.history[tx.Hash()]; found {
+	if _, found := mTx.History[tx.Hash()]; found {
 		return ErrAlreadyExists
 	}
-	mTx.history[tx.Hash()] = true
+	mTx.History[tx.Hash()] = true
 	return nil
 }
 
-/*
-
-// toStringPtr returns the current to field as a string pointer
-func (mTx *monitoredTx) toStringPtr() *string {
-	var to *string
-	if mTx.to != nil {
-		s := mTx.to.String()
-		to = &s
-	}
-	return to
-}
-
-// valueU64Ptr returns the current value field as a uint64 pointer
-func (mTx *monitoredTx) valueU64Ptr() *uint64 {
-	var value *uint64
-	if mTx.value != nil {
-		tmp := mTx.value.Uint64()
-		value = &tmp
-	}
-	return value
-}
-
-// dataStringPtr returns the current data field as a string pointer
-func (mTx *monitoredTx) dataStringPtr() *string {
-	var data *string
-	if mTx.data != nil {
-		tmp := hex.EncodeToString(mTx.data)
-		data = &tmp
-	}
-	return data
-}
-
-
-// historyStringSlice returns the current history field as a string slice
-func (mTx *monitoredTx) historyStringSlice() []string {
-	history := make([]string, 0, len(mTx.history))
-	for h := range mTx.history {
-		history = append(history, h.String())
-	}
-	return history
-}
-*/
-
 // historyHashSlice returns the current history field as a string slice
 func (mTx *monitoredTx) historyHashSlice() []common.Hash {
-	history := make([]common.Hash, 0, len(mTx.history))
-	for h := range mTx.history {
+	history := make([]common.Hash, 0, len(mTx.History))
+	for h := range mTx.History {
 		history = append(history, h)
 	}
 	return history
 }
 
-/*
-// blockNumberU64Ptr returns the current blockNumber as a uint64 pointer
-func (mTx *monitoredTx) blockNumberU64Ptr() *uint64 {
-	var blockNumber *uint64
-	if mTx.blockNumber != nil {
-		tmp := mTx.blockNumber.Uint64()
-		blockNumber = &tmp
-	}
-	return blockNumber
-}
-*/
-
 // MonitoredTxResult represents the result of a execution of a monitored tx
 type MonitoredTxResult struct {
-	ID     common.Hash
-	Status MonitoredTxStatus
-	Txs    map[common.Hash]TxResult
+	ID                 common.Hash
+	To                 *common.Address
+	Nonce              uint64
+	Value              *big.Int
+	Data               []byte
+	MinedAtBlockNumber *big.Int
+	Status             MonitoredTxStatus
+	Txs                map[common.Hash]TxResult
 }
 
 // TxResult represents the result of a execution of a ethereum transaction in the block chain

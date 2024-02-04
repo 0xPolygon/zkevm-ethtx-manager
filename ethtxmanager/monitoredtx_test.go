@@ -18,13 +18,13 @@ func TestTx(t *testing.T) {
 	gasPrice := big.NewInt(5)
 
 	mTx := monitoredTx{
-		to:        &to,
-		nonce:     nonce,
-		value:     value,
-		data:      data,
-		gas:       gas,
-		gasOffset: gasOffset,
-		gasPrice:  gasPrice,
+		To:        &to,
+		Nonce:     nonce,
+		Value:     value,
+		Data:      data,
+		Gas:       gas,
+		GasOffset: gasOffset,
+		GasPrice:  gasPrice,
 	}
 
 	tx := mTx.Tx()
