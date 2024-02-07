@@ -81,6 +81,8 @@ func New(cfg Config) (*Client, error) {
 		storage:  NewMemStorage(cfg.PersistenceFilename),
 	}
 
+	log.Init(cfg.Log)
+
 	return &client, nil
 }
 
