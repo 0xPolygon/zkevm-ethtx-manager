@@ -17,8 +17,6 @@ var (
 )
 
 func main() {
-	log.Init(log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}})
-
 	config := ethtxmanager.Config{
 		FrequencyToMonitorTxs: types.Duration{Duration: 1 * time.Second},
 		WaitTxToBeMined:       types.Duration{Duration: 2 * time.Minute},
@@ -35,6 +33,7 @@ func main() {
 			MultiGasProvider: false,
 			L1ChainID:        1337,
 		},
+		Log: log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
 	}
 	log.Debug("Creating ethtxmanager")
 	client, err := ethtxmanager.New(config)

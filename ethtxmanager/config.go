@@ -3,6 +3,7 @@ package ethtxmanager
 import (
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -60,4 +61,7 @@ type Config struct {
 	PersistenceFilename string `mapstructure:"PersistenceFilename"`
 	// Etherman configuration
 	Etherman etherman.Config `mapstructure:"Etherman"`
+
+	// Log configuration
+	Log log.Config `mapstructure:"Log"`
 }
