@@ -356,7 +356,7 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 		return fmt.Errorf("failed to get created monitored txs: %v", err)
 	}
 
-	log.Infof("found %v monitored tx to process", len(mTxs))
+	log.Debugf("found %v monitored tx to process", len(mTxs))
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(mTxs))
@@ -387,7 +387,7 @@ func (c *Client) waitMinedTxTobeFinalized(ctx context.Context) error {
 		return fmt.Errorf("failed to get mined monitored txs: %v", err)
 	}
 
-	log.Infof("found %v mined monitored tx to process", len(mTxs))
+	log.Debugf("found %v mined monitored tx to process", len(mTxs))
 
 	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
 	if err != nil {
