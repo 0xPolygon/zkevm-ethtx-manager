@@ -35,6 +35,7 @@ func main() {
 		},
 		Log: log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
 	}
+	log.Init(config.Log)
 	log.Debug("Creating ethtxmanager")
 	client, err := ethtxmanager.New(config)
 	if err != nil {
