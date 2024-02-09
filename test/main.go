@@ -96,7 +96,10 @@ func main() {
 	}
 	for _, result := range results {
 		log.Infof("Removing tx %s", result.ID)
-		client.Remove(ctx, result.ID)
+		err = client.Remove(ctx, result.ID)
+		if err != nil {
+			log.Errorf("Error removing tx %s: %s", result.ID, err)
+		}
 	}
 }
 
