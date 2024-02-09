@@ -24,7 +24,10 @@ const (
 	// status is Successful
 	MonitoredTxStatusMined = MonitoredTxStatus("mined")
 
-	// MonitoredTxStatusFinalized means the tx was set by the owner as finalized
+	// MonitoredTxStatusConsolidated means the tx was already mined N blocks ago
+	MonitoredTxStatusConsolidated = MonitoredTxStatus("consolidated")
+
+	// MonitoredTxStatusFinalized means the tx was already mined M (M > N) blocks ago
 	MonitoredTxStatusFinalized = MonitoredTxStatus("finalized")
 )
 

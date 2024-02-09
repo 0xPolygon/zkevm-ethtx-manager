@@ -41,6 +41,7 @@ type Client struct {
 	cfg      Config
 	etherman ethermanInterface
 	storage  storageInterface
+	from     common.Address
 }
 
 type pending struct {
@@ -79,6 +80,7 @@ func New(cfg Config) (*Client, error) {
 		cfg:      cfg,
 		etherman: etherman,
 		storage:  NewMemStorage(cfg.PersistenceFilename),
+		from:     auth.From,
 	}
 
 	log.Init(cfg.Log)
@@ -147,11 +149,10 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte) (common.Hash, error) {
 	var nonce uint64
 	var err error
-	var from = c.cfg.From
 
 	if forcedNonce == nil {
 		// get next nonce
-		nonce, err = c.etherman.CurrentNonce(ctx, from)
+		nonce, err = c.etherman.CurrentNonce(ctx, c.from)
 		if err != nil {
 			err := fmt.Errorf("failed to get current nonce: %w", err)
 			log.Errorf(err.Error())
@@ -162,11 +163,11 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	}
 
 	// get gas
-	gas, err := c.etherman.EstimateGas(ctx, from, to, value, data)
+	gas, err := c.etherman.EstimateGas(ctx, c.from, to, value, data)
 	if err != nil {
 		err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
 		log.Error(err.Error())
-		log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", from.String(), to.String(), value.String())
+		log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
 		if c.cfg.ForcedGas > 0 {
 			gas = c.cfg.ForcedGas
 		} else {
@@ -194,7 +195,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 
 	// create monitored tx
 	mTx := monitoredTx{
-		ID: id, From: from, To: to,
+		ID: id, From: c.from, To: to,
 		Nonce: nonce, Value: value, Data: data,
 		Gas: gas, GasPrice: gasPrice,
 		Status:  MonitoredTxStatusCreated,
@@ -251,15 +252,13 @@ func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult,
 	return c.buildResult(ctx, mTx)
 }
 
-// SetStatusDone sets the status of a monitored tx to MonitoredStatusDone.
-// this method is provided to the callers to decide when a monitored tx should be
-// considered done, so they can start to ignore it when querying it by Status.
-func (c *Client) setStatusFinalized(ctx context.Context, id common.Hash) error {
+// setStatusConsolidated sets the status of a monitored tx to MonitoredStatusConsolidated.
+func (c *Client) setStatusConsolidated(ctx context.Context, id common.Hash) error {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	mTx.Status = MonitoredTxStatusFinalized
+	mTx.Status = MonitoredTxStatusConsolidated
 	return c.storage.Update(ctx, mTx)
 }
 
@@ -310,7 +309,7 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 func (c *Client) Start() {
 	// If no persistence file is uses check L1 for pending txs
 	if c.cfg.PersistenceFilename == "" {
-		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.cfg.From, c.cfg.Etherman.HTTPHeaders)
+		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.from, c.cfg.Etherman.HTTPHeaders)
 		if err != nil {
 			log.Errorf("failed to get pending txs from L1: %v", err)
 		}
@@ -337,9 +336,13 @@ func (c *Client) Start() {
 			if err != nil {
 				c.logErrorAndWait("failed to monitor txs: %v", err)
 			}
-			err = c.waitMinedTxTobeFinalized(context.Background())
+			err = c.waitMinedTxToBeConsolidated(context.Background())
 			if err != nil {
-				c.logErrorAndWait("failed to wait mined tx to be finalized: %v", err)
+				c.logErrorAndWait("failed to wait consolidated tx to be finalized: %v", err)
+			}
+			err = c.waitConsolidatedTxToBeFinalized(context.Background())
+			if err != nil {
+				c.logErrorAndWait("failed to wait consolidated tx to be finalized: %v", err)
 			}
 		}
 	}
@@ -380,9 +383,9 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 	return nil
 }
 
-// waitMinedTxTobeFinalized checks all mined monitored txs and wait the number of
-// l1 blocks configured to confirm the tx
-func (c *Client) waitMinedTxTobeFinalized(ctx context.Context) error {
+// waitMinedTxToBeConsolidated checks all consolidated monitored txs and wait the number of
+// l1 blocks configured to consolidated the tx
+func (c *Client) waitMinedTxToBeConsolidated(ctx context.Context) error {
 	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusMined}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
@@ -397,13 +400,44 @@ func (c *Client) waitMinedTxTobeFinalized(ctx context.Context) error {
 	}
 
 	for _, mTx := range mTxs {
-		if mTx.BlockNumber.Uint64()+c.cfg.L1ConfirmationBlocks <= currentBlockNumber {
+		if mTx.BlockNumber.Uint64()+c.cfg.ConsolidationL1ConfirmationBlocks <= currentBlockNumber {
+			mTxLogger := createMonitoredTxLogger(mTx)
+			mTxLogger.Infof("consolidated")
+			mTx.Status = MonitoredTxStatusConsolidated
+			err := c.storage.Update(ctx, mTx)
+			if err != nil {
+				return fmt.Errorf("failed to update mined monitored tx: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// waitConsolidatedTxToBeFinalized checks all consolidated monitored txs and wait the number of
+// l1 blocks configured to finalize the tx
+func (c *Client) waitConsolidatedTxToBeFinalized(ctx context.Context) error {
+	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusConsolidated}
+	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
+	if err != nil {
+		return fmt.Errorf("failed to get consolidated monitored txs: %v", err)
+	}
+
+	log.Debugf("found %v consolidated monitored tx to process", len(mTxs))
+
+	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get latest block number: %v", err)
+	}
+
+	for _, mTx := range mTxs {
+		if mTx.BlockNumber.Uint64()+c.cfg.FinalizationL1ConfirmationBlocks <= currentBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("finalized")
 			mTx.Status = MonitoredTxStatusFinalized
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
-				return fmt.Errorf("failed to update mined monitored tx: %v", err)
+				return fmt.Errorf("failed to update consolidated monitored tx: %v", err)
 			}
 		}
 	}
@@ -746,14 +780,14 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 
 			// if the result is confirmed, we set it as done do stop looking into this monitored tx
 			if result.Status == MonitoredTxStatusMined {
-				err := c.setStatusFinalized(ctx, result.ID)
+				err := c.setStatusConsolidated(ctx, result.ID)
 				if err != nil {
-					mTxResultLogger.Errorf("failed to set monitored tx as done, err: %v", err)
+					mTxResultLogger.Errorf("failed to set monitored tx as consolidated, err: %v", err)
 					// if something goes wrong at this point, we skip this result and move to the next.
 					// this result is going to be handled again in the next cycle by the outer loop.
 					continue
 				} else {
-					mTxResultLogger.Info("monitored tx confirmed")
+					mTxResultLogger.Info("monitored tx consolidated")
 				}
 				resultHandler(result)
 				continue
