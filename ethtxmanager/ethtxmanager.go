@@ -564,7 +564,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			logger.Debugf("signed tx not found in the network")
 			err := c.etherman.SendTx(ctx, signedTx)
 			if err != nil {
-				logger.Errorf("failed to send tx %v to network: %v", signedTx.Hash().String(), err)
+				logger.Warnf("failed to send tx %v to network: %v", signedTx.Hash().String(), err)
 				return
 			}
 			logger.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
@@ -580,7 +580,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 				}
 			}
 		} else {
-			logger.Infof("signed tx already found in the network")
+			logger.Warnf("signed tx already found in the network")
 		}
 
 		log.Infof("waiting signedTx to be mined...")
@@ -588,19 +588,22 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 		// wait tx to get mined
 		confirmed, err = c.etherman.WaitTxToBeMined(ctx, signedTx, c.cfg.WaitTxToBeMined.Duration)
 		if err != nil {
-			logger.Errorf("failed to wait tx to be mined: %v", err)
+			logger.Warnf("failed to wait tx to be mined: %v", err)
 			return
 		}
 		if !confirmed {
-			log.Infof("signedTx not mined yet and timeout has been reached")
+			log.Warnf("signedTx not mined yet and timeout has been reached")
 			return
 		}
+
+		// Wait for the receipt to be available
+		time.Sleep(c.cfg.WaitReceiptToBeGenerated.Duration)
 
 		// get tx receipt
 		var txReceipt *types.Receipt
 		txReceipt, err = c.etherman.GetTxReceipt(ctx, signedTx.Hash())
 		if err != nil {
-			logger.Errorf("failed to get tx receipt for tx %v: %v", signedTx.Hash().String(), err)
+			logger.Warnf("failed to get tx receipt for tx %v: %v", signedTx.Hash().String(), err)
 			return
 		}
 		lastReceiptChecked = *txReceipt
