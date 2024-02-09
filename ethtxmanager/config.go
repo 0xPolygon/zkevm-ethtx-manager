@@ -13,9 +13,9 @@ type Config struct {
 	// WaitTxToBeMined time to wait after transaction was sent to the ethereum
 	WaitTxToBeMined types.Duration `mapstructure:"WaitTxToBeMined"`
 	// ConsolidationL1ConfirmationBlocks is the number of blocks to wait for a L1 tx to be consolidated
-	ConsolidationL1ConfirmationBlocks uint64 `mapstructure:"L1ConsolidationConfirmationBlocks"`
+	ConsolidationL1ConfirmationBlocks uint64 `mapstructure:"ConsolidationL1ConfirmationBlocks"`
 	// FinalizationL1ConfirmationBlocks is the number of blocks to wait for a L1 tx to be finalized
-	FinalizationL1ConfirmationBlocks uint64 `mapstructure:"L1FinalizationConfirmationBlocks"`
+	FinalizationL1ConfirmationBlocks uint64 `mapstructure:"FinalizationL1ConfirmationBlocks"`
 
 	// PrivateKeys defines all the key store files that are going
 	// to be read in order to provide the private keys to sign the L1 txs

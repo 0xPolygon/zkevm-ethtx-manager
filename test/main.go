@@ -88,6 +88,16 @@ func main() {
 			break
 		}
 	}
+
+	// Clean up
+	results, err := client.ResultsByStatus(ctx, []ethtxmanager.MonitoredTxStatus{ethtxmanager.MonitoredTxStatusFinalized})
+	if err != nil {
+		log.Errorf("Error getting result: %s", err)
+	}
+	for _, result := range results {
+		log.Infof("Removing tx %s", result.ID)
+		client.Remove(ctx, result.ID)
+	}
 }
 
 func sendTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client, nonce uint64) common.Hash {
