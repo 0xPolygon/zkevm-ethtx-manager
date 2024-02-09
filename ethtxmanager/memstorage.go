@@ -14,6 +14,7 @@ import (
 // MemStorage hold txs to be managed
 type MemStorage struct {
 	TxsMutex            sync.RWMutex
+	FileMutex           sync.RWMutex
 	Transactions        map[common.Hash]monitoredTx
 	PersistenceFilename string
 }
@@ -51,6 +52,8 @@ func (s *MemStorage) persist() {
 	if s.PersistenceFilename != "" {
 		s.TxsMutex.RLock()
 		defer s.TxsMutex.RUnlock()
+		s.FileMutex.Lock()
+		defer s.FileMutex.Unlock()
 		jsonFile, _ := json.Marshal(s.Transactions)
 		err := os.WriteFile(s.PersistenceFilename+".tmp", jsonFile, 0644) // nolint:gosec, gomnd
 		if err != nil {

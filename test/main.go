@@ -18,15 +18,15 @@ var (
 
 func main() {
 	config := ethtxmanager.Config{
-		FrequencyToMonitorTxs: types.Duration{Duration: 1 * time.Second},
-		WaitTxToBeMined:       types.Duration{Duration: 2 * time.Minute},
-		L1ConfirmationBlocks:  4,
-		PrivateKeys:           []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
-		ForcedGas:             0,
-		GasPriceMarginFactor:  1,
-		MaxGasPriceLimit:      0,
-		From:                  common.HexToAddress("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"),
-		PersistenceFilename:   "ethtxmanager-persistence.json",
+		FrequencyToMonitorTxs:             types.Duration{Duration: 1 * time.Second},
+		WaitTxToBeMined:                   types.Duration{Duration: 2 * time.Minute},
+		ConsolidationL1ConfirmationBlocks: 5,
+		FinalizationL1ConfirmationBlocks:  10,
+		PrivateKeys:                       []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
+		ForcedGas:                         0,
+		GasPriceMarginFactor:              1,
+		MaxGasPriceLimit:                  0,
+		PersistenceFilename:               "ethtxmanager-persistence.json",
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
 			HTTPHeaders:      map[string]string{},
@@ -50,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error creating etherman client: %s", err)
 	}
-	nonce, err := testEtherman.CurrentNonce(ctx, config.From)
+	nonce, err := testEtherman.CurrentNonce(ctx, common.HexToAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"))
 	if err != nil {
 		log.Fatalf("Error getting nonce: %s", err)
 	}

@@ -4,7 +4,6 @@ import (
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // Config is configuration for ethereum transaction manager
@@ -13,8 +12,10 @@ type Config struct {
 	FrequencyToMonitorTxs types.Duration `mapstructure:"FrequencyToMonitorTxs"`
 	// WaitTxToBeMined time to wait after transaction was sent to the ethereum
 	WaitTxToBeMined types.Duration `mapstructure:"WaitTxToBeMined"`
-	// L1ConfirmationBlocks is the number of blocks to wait for a L1 tx to be confirmed
-	L1ConfirmationBlocks uint64 `mapstructure:"L1ConfirmationBlocks"`
+	// ConsolidationL1ConfirmationBlocks is the number of blocks to wait for a L1 tx to be consolidated
+	ConsolidationL1ConfirmationBlocks uint64 `mapstructure:"L1ConsolidationConfirmationBlocks"`
+	// FinalizationL1ConfirmationBlocks is the number of blocks to wait for a L1 tx to be finalized
+	FinalizationL1ConfirmationBlocks uint64 `mapstructure:"L1FinalizationConfirmationBlocks"`
 
 	// PrivateKeys defines all the key store files that are going
 	// to be read in order to provide the private keys to sign the L1 txs
@@ -55,8 +56,6 @@ type Config struct {
 	// max gas price limit: 110
 	// tx gas price = 110
 	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
-	// Sender Address
-	From common.Address `mapstructure:"From"`
 	// PersistenceFilename is the filename to store the memory storage
 	PersistenceFilename string `mapstructure:"PersistenceFilename"`
 	// Etherman configuration
