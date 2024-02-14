@@ -20,6 +20,7 @@ func main() {
 	config := ethtxmanager.Config{
 		FrequencyToMonitorTxs:             types.Duration{Duration: 1 * time.Second},
 		WaitTxToBeMined:                   types.Duration{Duration: 2 * time.Minute},
+		WaitReceiptToBeGenerated:          types.Duration{Duration: 10 * time.Second},
 		ConsolidationL1ConfirmationBlocks: 5,
 		FinalizationL1ConfirmationBlocks:  10,
 		PrivateKeys:                       []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
