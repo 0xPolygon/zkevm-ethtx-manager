@@ -7,7 +7,7 @@ require (
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/invopop/jsonschema v0.12.0
 	github.com/stretchr/testify v1.8.4
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 )
 
 require (
