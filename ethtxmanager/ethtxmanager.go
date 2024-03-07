@@ -17,7 +17,11 @@ import (
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 const failureIntervalInSeconds = 5
@@ -126,6 +130,8 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 
 			data := common.Hex2Bytes(string(tx.Data))
 
+			// TODO: handle case of blob transaction
+
 			mTx := monitoredTx{
 				ID:       types.NewTx(&types.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
 				From:     common.HexToAddress(tx.From),
@@ -174,7 +180,7 @@ func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, e
 }
 
 // Add a transaction to be sent and monitored
-func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte) (common.Hash, error) {
+func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, sidecar *types.BlobTxSidecar) (common.Hash, error) {
 	var nonce uint64
 	var err error
 
@@ -211,13 +217,49 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		return common.Hash{}, err
 	}
 
+	// blob gas price estimation
+	var blobFeeCap *big.Int
+	if sidecar != nil {
+		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
+		if err != nil {
+			log.Errorf("failed to get parent header: %v", err)
+			return common.Hash{}, err
+		}
+
+		if parentHeader.ExcessBlobGas != nil && parentHeader.BlobGasUsed != nil {
+			parentExcessBlobGas := eip4844.CalcExcessBlobGas(*parentHeader.ExcessBlobGas, *parentHeader.BlobGasUsed)
+			blobFeeCap = eip4844.CalcBlobFee(parentExcessBlobGas)
+		} else {
+			log.Infof("legacy parent header no blob gas info")
+			blobFeeCap = eip4844.CalcBlobFee(0)
+		}
+	}
+
+	gasTipCap, err := c.etherman.GetSuggestGasTipCap(ctx)
+	if err != nil {
+		log.Errorf("failed to get gas tip cap: %v", err)
+		return common.Hash{}, err
+	}
+
 	// Calculate id
-	tx := types.NewTx(&types.LegacyTx{
-		To:    to,
-		Nonce: nonce,
-		Value: value,
-		Data:  data,
-	})
+	var tx *types.Transaction
+	if sidecar == nil {
+		tx = types.NewTx(&types.LegacyTx{
+			To:    to,
+			Nonce: nonce,
+			Value: value,
+			Data:  data,
+		})
+	} else {
+		tx = types.NewTx(&types.BlobTx{
+			To:         *to,
+			Nonce:      nonce,
+			Value:      uint256.MustFromBig(value),
+			Data:       data,
+			BlobHashes: sidecar.BlobHashes(),
+			Sidecar:    sidecar,
+		})
+	}
 
 	id := tx.Hash()
 
@@ -226,6 +268,9 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		ID: id, From: c.from, To: to,
 		Nonce: nonce, Value: value, Data: data,
 		Gas: gas, GasPrice: gasPrice,
+		BlobSidecar:  sidecar,
+		BlobGas:      tx.BlobGas(),
+		BlobGasPrice: blobFeeCap, GasTipCap: gasTipCap,
 		Status:  MonitoredTxStatusCreated,
 		History: make(map[common.Hash]bool),
 	}
@@ -850,6 +895,51 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 				mTxResultLogger.Infof("waiting for monitored tx to get confirmed, status: %v", result.Status.String())
 			}
 		}
+	}
+}
+
+func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
+	dataLen := len(data)
+	if dataLen > params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1) {
+		log.Infof("blob data longer than allowed (length: %v, limit: %v)", dataLen, params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1))
+		return kzg4844.Blob{}, errors.New("blob data longer than allowed")
+	}
+
+	// 1 Blob = 4096 Field elements x 32 bytes/field element = 128 KB
+	elemSize := params.BlobTxBytesPerFieldElement
+
+	blob := kzg4844.Blob{}
+	fieldIndex := -1
+	for i := 0; i < len(data); i += (elemSize - 1) {
+		fieldIndex++
+		if fieldIndex == params.BlobTxFieldElementsPerBlob {
+			break
+		}
+		max := i + (elemSize - 1)
+		if max > len(data) {
+			max = len(data)
+		}
+		copy(blob[fieldIndex*elemSize+1:], data[i:max])
+	}
+	return blob, nil
+}
+
+func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
+	var commitments []kzg4844.Commitment
+	var proofs []kzg4844.Proof
+
+	for _, blob := range blobs {
+		c, _ := kzg4844.BlobToCommitment(blob)
+		p, _ := kzg4844.ComputeBlobProof(blob, c)
+
+		commitments = append(commitments, c)
+		proofs = append(proofs, p)
+	}
+
+	return &types.BlobTxSidecar{
+		Blobs:       blobs,
+		Commitments: commitments,
+		Proofs:      proofs,
 	}
 }
 

@@ -33,6 +33,7 @@ type ethereumClient interface {
 	ethereum.ContractCaller
 	ethereum.GasEstimator
 	ethereum.GasPricer
+	ethereum.GasPricer1559
 	ethereum.PendingStateReader
 	ethereum.TransactionReader
 	ethereum.TransactionSender
@@ -278,4 +279,16 @@ func (etherMan *Client) getBlockNumber(ctx context.Context, blockNumber rpc.Bloc
 		return 0, err
 	}
 	return header.Number.Uint64(), nil
+}
+
+// GetHeaderByNumber returns a block header from the current canonical chain, if number is nil the latest header is returned
+func (etherMan *Client) GetHeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	header, err := etherMan.EthClient.HeaderByNumber(ctx, number)
+	return header, err
+}
+
+// GetSuggestGasTipCap retrieves the currently suggested gas tip cap after 1559 to allow a timely execution of a transaction
+func (etherMan *Client) GetSuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	gasTipCap, err := etherMan.EthClient.SuggestGasTipCap(ctx)
+	return gasTipCap, err
 }

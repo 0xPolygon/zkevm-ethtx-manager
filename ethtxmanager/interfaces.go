@@ -22,6 +22,8 @@ type ethermanInterface interface {
 	SignTx(ctx context.Context, sender common.Address, tx *types.Transaction) (*types.Transaction, error)
 	GetRevertMessage(ctx context.Context, tx *types.Transaction) (string, error)
 	GetLatestBlockNumber(ctx context.Context) (uint64, error)
+	GetHeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
+	GetSuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
 type storageInterface interface {
