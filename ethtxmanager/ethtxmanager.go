@@ -219,6 +219,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 
 	// blob gas price estimation
 	var blobFeeCap *big.Int
+	var gasTipCap *big.Int
 	if sidecar != nil {
 		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
 		if err != nil {
@@ -233,12 +234,12 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 			log.Infof("legacy parent header no blob gas info")
 			blobFeeCap = eip4844.CalcBlobFee(0)
 		}
-	}
 
-	gasTipCap, err := c.etherman.GetSuggestGasTipCap(ctx)
-	if err != nil {
-		log.Errorf("failed to get gas tip cap: %v", err)
-		return common.Hash{}, err
+		gasTipCap, err = c.etherman.GetSuggestGasTipCap(ctx)
+		if err != nil {
+			log.Errorf("failed to get gas tip cap: %v", err)
+			return common.Hash{}, err
+		}
 	}
 
 	// Calculate id

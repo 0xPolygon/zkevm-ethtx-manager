@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	to1 = common.HexToAddress("0x0001")
+	to0  = common.HexToAddress("0x0000000000000000000000000000000000000000")
+	from = common.HexToAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
 )
 
 func main() {
@@ -53,14 +54,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error creating etherman client: %s", err)
 	}
-	nonce, err := testEtherman.CurrentNonce(ctx, common.HexToAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"))
+
+	nonce, err := testEtherman.CurrentNonce(ctx, from)
 	if err != nil {
 		log.Fatalf("Error getting nonce: %s", err)
 	}
 
 	go client.Start()
 	log.Debug("ethtxmanager started")
-	sendTransaction(ctx, client, nonce)
+	sendBlobTransaction(ctx, client, nonce)
 	nonce++
 
 	for i := 0; i < 0; i++ {
@@ -107,7 +109,7 @@ func main() {
 }
 
 func sendTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client, nonce uint64) common.Hash {
-	id, err := ethtxmanager.Add(ctx, &to1, &nonce, big.NewInt(1), []byte{}, nil)
+	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(1), []byte{byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}, nil)
 	if err != nil {
 		log.Errorf("Error sending transaction: %s", err)
 	} else {
@@ -125,7 +127,9 @@ func sendBlobTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client,
 	}
 	blobSidecar := ethtxmanager.MakeBlobSidecar([]kzg4844.Blob{blob})
 
-	id, err := ethtxmanager.Add(ctx, &to1, &nonce, big.NewInt(1), []byte{}, blobSidecar)
+	// data := []byte("0xe46761c4") // pol method
+	data := []byte{}
+	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(0), data, blobSidecar)
 	if err != nil {
 		log.Errorf("Error sending Blob transaction: %s", err)
 	} else {

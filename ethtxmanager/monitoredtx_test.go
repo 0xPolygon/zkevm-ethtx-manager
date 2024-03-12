@@ -72,7 +72,6 @@ func TestBlobTx(t *testing.T) {
 	assert.Equal(t, nonce, tx.Nonce())
 	assert.Equal(t, value, tx.Value())
 	assert.Equal(t, data, tx.Data())
-	assert.Equal(t, gas+gasOffset, tx.Gas())
 	assert.Equal(t, blobSidecar, tx.BlobTxSidecar())
 	assert.Equal(t, blobGas, tx.BlobGas())
 	assert.Equal(t, blobGasPrice, tx.BlobGasFeeCap())

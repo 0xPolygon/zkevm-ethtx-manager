@@ -118,7 +118,8 @@ func (mTx monitoredTx) Tx() *types.Transaction {
 		tx = types.NewTx(&types.BlobTx{
 			To:         *mTx.To,
 			Nonce:      mTx.Nonce,
-			Value:      uint256.NewInt(0),
+			Value:      uint256.MustFromBig(mTx.Value),
+			Data:       mTx.Data,
 			GasFeeCap:  uint256.MustFromBig(mTx.GasPrice),
 			GasTipCap:  uint256.MustFromBig(mTx.GasTipCap),
 			Gas:        mTx.Gas,
