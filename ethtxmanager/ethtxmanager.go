@@ -196,19 +196,6 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		nonce = *forcedNonce
 	}
 
-	// get gas
-	gas, err := c.etherman.EstimateGas(ctx, c.from, to, value, data)
-	if err != nil {
-		err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
-		log.Error(err.Error())
-		log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
-		if c.cfg.ForcedGas > 0 {
-			gas = c.cfg.ForcedGas
-		} else {
-			return common.Hash{}, err
-		}
-	}
-
 	// get gas price
 	gasPrice, err := c.suggestedGasPrice(ctx)
 	if err != nil {
@@ -217,10 +204,12 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		return common.Hash{}, err
 	}
 
-	// blob gas price estimation
+	var gas uint64
 	var blobFeeCap *big.Int
 	var gasTipCap *big.Int
+
 	if sidecar != nil {
+		// blob gas price estimation
 		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
 		if err != nil {
 			log.Errorf("failed to get parent header: %v", err)
@@ -239,6 +228,29 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		if err != nil {
 			log.Errorf("failed to get gas tip cap: %v", err)
 			return common.Hash{}, err
+		}
+
+		// get gas
+		gas, err = c.etherman.EstimateGasBlobTx(ctx, c.from, to, gasPrice, gasTipCap, value, data)
+		if err != nil {
+			err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
+			log.Error(err.Error())
+			log.Debugf("failed to estimate gas for blob tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
+			return common.Hash{}, err
+		}
+
+	} else {
+		// get gas
+		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
+		if err != nil {
+			err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
+			log.Error(err.Error())
+			log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
+			if c.cfg.ForcedGas > 0 {
+				gas = c.cfg.ForcedGas
+			} else {
+				return common.Hash{}, err
+			}
 		}
 	}
 
@@ -739,13 +751,26 @@ func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt type
 // state of the blockchain
 func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLogger *log.Logger) error {
 	mTxLogger.Debug("reviewing")
+
+	var err error
+	var gas uint64
 	// get gas
-	gas, err := c.etherman.EstimateGas(ctx, mTx.From, mTx.To, mTx.Value, mTx.Data)
-	if err != nil {
-		err := fmt.Errorf("failed to estimate gas: %w", err)
-		mTxLogger.Errorf(err.Error())
-		return err
+	if mTx.BlobSidecar != nil {
+		gas, err = c.etherman.EstimateGasBlobTx(ctx, mTx.From, mTx.To, mTx.GasPrice, mTx.GasTipCap, mTx.Value, mTx.Data)
+		if err != nil {
+			err := fmt.Errorf("failed to estimate gas blob tx: %w", err)
+			mTxLogger.Errorf(err.Error())
+			return err
+		}
+	} else {
+		gas, err = c.etherman.EstimateGas(ctx, mTx.From, mTx.To, mTx.Value, mTx.Data)
+		if err != nil {
+			err := fmt.Errorf("failed to estimate gas: %w", err)
+			mTxLogger.Errorf(err.Error())
+			return err
+		}
 	}
+	log.Infof("new estimated gas: %d, current one %d", gas, mTx.Gas)
 
 	// check gas
 	if gas > mTx.Gas {
