@@ -25,12 +25,12 @@ type Response struct {
 	Result  json.RawMessage
 }
 
-// Client defines typed wrappers for the zkEVM RPC API.
+// RPCClient is a client to interact with the Ethereum JSON RPC Server
 type RPCClient struct {
 	url string
 }
 
-// NewClient creates an instance of client
+// NewRPCClient creates an instance of client
 func NewRPCClient(url string) *RPCClient {
 	return &RPCClient{
 		url: url,
