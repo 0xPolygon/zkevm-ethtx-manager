@@ -19,7 +19,7 @@ type MemStorage struct {
 	PersistenceFilename string
 }
 
-// NewPostgresStorage creates a new instance of storage
+// NewMemStorage creates a new instance of storage
 func NewMemStorage(persistenceFilename string) *MemStorage {
 	transactions := make(map[common.Hash]monitoredTx)
 	if persistenceFilename != "" {

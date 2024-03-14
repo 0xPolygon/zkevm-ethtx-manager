@@ -124,7 +124,7 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 				return nil, fmt.Errorf("failed to convert gasPrice %v to big.Int", tx.GasPrice)
 			}
 
-			data := common.Hex2Bytes(string(tx.Data))
+			data := common.Hex2Bytes(tx.Data)
 
 			mTx := monitoredTx{
 				ID:       types.NewTx(&types.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
