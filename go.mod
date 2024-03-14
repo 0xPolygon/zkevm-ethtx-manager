@@ -3,8 +3,9 @@ module github.com/0xPolygonHermez/zkevm-ethtx-manager
 go 1.21
 
 require (
-	github.com/ethereum/go-ethereum v1.13.13
+	github.com/ethereum/go-ethereum v1.13.14
 	github.com/hermeznetwork/tracerr v0.3.2
+	github.com/holiman/uint256 v1.2.4
 	github.com/invopop/jsonschema v0.12.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
@@ -33,7 +34,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/uuid v1.4.0 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
-	github.com/holiman/uint256 v1.2.4 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/logrusorgru/aurora v0.0.0-20181002194514-a7b3b318ed4e // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

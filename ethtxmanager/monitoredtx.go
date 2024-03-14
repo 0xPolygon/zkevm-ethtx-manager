@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -69,6 +70,18 @@ type monitoredTx struct {
 	// tx gas price
 	GasPrice *big.Int `mapstructure:"gasPrice"`
 
+	// blob Sidecar
+	BlobSidecar *types.BlobTxSidecar `mapstructure:"blobSidecar"`
+
+	// blob Gas
+	BlobGas uint64 `mapstructure:"blobGas"`
+
+	// blob gas price
+	BlobGasPrice *big.Int `mapstructure:"blobGasPrice"`
+
+	// gas tip cap
+	GasTipCap *big.Int `mapstructure:"gasTipCap"`
+
 	// Status of this monitoring
 	Status MonitoredTxStatus `mapstructure:"status"`
 
@@ -91,14 +104,30 @@ type monitoredTx struct {
 
 // Tx uses the current information to build a tx
 func (mTx monitoredTx) Tx() *types.Transaction {
-	tx := types.NewTx(&types.LegacyTx{
-		To:       mTx.To,
-		Nonce:    mTx.Nonce,
-		Value:    mTx.Value,
-		Data:     mTx.Data,
-		Gas:      mTx.Gas + mTx.GasOffset,
-		GasPrice: mTx.GasPrice,
-	})
+	var tx *types.Transaction
+	if mTx.BlobSidecar == nil {
+		tx = types.NewTx(&types.LegacyTx{
+			To:       mTx.To,
+			Nonce:    mTx.Nonce,
+			Value:    mTx.Value,
+			Data:     mTx.Data,
+			Gas:      mTx.Gas + mTx.GasOffset,
+			GasPrice: mTx.GasPrice,
+		})
+	} else {
+		tx = types.NewTx(&types.BlobTx{
+			To:         *mTx.To,
+			Nonce:      mTx.Nonce,
+			Value:      uint256.MustFromBig(mTx.Value),
+			Data:       mTx.Data,
+			GasFeeCap:  uint256.MustFromBig(mTx.GasPrice),
+			GasTipCap:  uint256.MustFromBig(mTx.GasTipCap),
+			Gas:        mTx.Gas,
+			BlobFeeCap: uint256.MustFromBig(mTx.BlobGasPrice),
+			BlobHashes: mTx.BlobSidecar.BlobHashes(),
+			Sidecar:    mTx.BlobSidecar,
+		})
+	}
 
 	return tx
 }

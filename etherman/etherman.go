@@ -33,6 +33,7 @@ type ethereumClient interface {
 	ethereum.ContractCaller
 	ethereum.GasEstimator
 	ethereum.GasPricer
+	ethereum.GasPricer1559
 	ethereum.PendingStateReader
 	ethereum.TransactionReader
 	ethereum.TransactionSender
@@ -163,6 +164,18 @@ func (etherMan *Client) EstimateGas(ctx context.Context, from common.Address, to
 	})
 }
 
+// EstimateGasBlobTx returns the estimated gas for the blob tx
+func (etherMan *Client) EstimateGasBlobTx(ctx context.Context, from common.Address, to *common.Address, gasFeeCap *big.Int, gasTipCap *big.Int, value *big.Int, data []byte) (uint64, error) {
+	return etherMan.EthClient.EstimateGas(ctx, ethereum.CallMsg{
+		From:      from,
+		To:        to,
+		GasFeeCap: gasFeeCap,
+		GasTipCap: gasTipCap,
+		Value:     value,
+		Data:      data,
+	})
+}
+
 // CheckTxWasMined check if a tx was already mined
 func (etherMan *Client) CheckTxWasMined(ctx context.Context, txHash common.Hash) (bool, *types.Receipt, error) {
 	receipt, err := etherMan.EthClient.TransactionReceipt(ctx, txHash)
@@ -278,4 +291,16 @@ func (etherMan *Client) getBlockNumber(ctx context.Context, blockNumber rpc.Bloc
 		return 0, err
 	}
 	return header.Number.Uint64(), nil
+}
+
+// GetHeaderByNumber returns a block header from the current canonical chain, if number is nil the latest header is returned
+func (etherMan *Client) GetHeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	header, err := etherMan.EthClient.HeaderByNumber(ctx, number)
+	return header, err
+}
+
+// GetSuggestGasTipCap retrieves the currently suggested gas tip cap after 1559 to allow a timely execution of a transaction
+func (etherMan *Client) GetSuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	gasTipCap, err := etherMan.EthClient.SuggestGasTipCap(ctx)
+	return gasTipCap, err
 }
