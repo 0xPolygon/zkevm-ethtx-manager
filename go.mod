@@ -6,7 +6,7 @@ require (
 	github.com/ethereum/go-ethereum v1.13.13
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/invopop/jsonschema v0.12.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 )
 
