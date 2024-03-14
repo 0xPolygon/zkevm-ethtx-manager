@@ -67,7 +67,7 @@ func main() {
 
 	for i := 0; i < 0; i++ {
 		time.Sleep(100 * time.Millisecond)
-		sendBlobTransaction(ctx, client, nonce)
+		sendTransaction(ctx, client, nonce)
 		nonce++
 	}
 
