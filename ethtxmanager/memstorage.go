@@ -25,7 +25,7 @@ func NewMemStorage(persistenceFilename string) *MemStorage {
 	if persistenceFilename != "" {
 		// Check if the file exists
 		if _, err := os.Stat(persistenceFilename); os.IsNotExist(err) {
-			log.Warnf("Persistence file %s does not exist", persistenceFilename)
+			log.Infof("Persistence file %s does not exist", persistenceFilename)
 		} else {
 			ReadFile, err := os.ReadFile(persistenceFilename)
 			if err != nil {

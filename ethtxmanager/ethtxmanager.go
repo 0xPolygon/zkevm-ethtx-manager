@@ -239,6 +239,13 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 			return common.Hash{}, err
 		}
 
+		// margin
+		const multiplier = 10
+		gasTipCap = gasTipCap.Mul(gasTipCap, big.NewInt(multiplier))
+		gasPrice = gasPrice.Mul(gasPrice, big.NewInt(multiplier))
+		blobFeeCap = blobFeeCap.Mul(blobFeeCap, big.NewInt(multiplier))
+		gas = gas * 12 / 10
+
 	} else {
 		// get gas
 		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
@@ -751,11 +758,57 @@ func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt type
 // state of the blockchain
 func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLogger *log.Logger) error {
 	mTxLogger.Debug("reviewing")
-
+	isBlobTx := mTx.BlobSidecar != nil
 	var err error
 	var gas uint64
+
+	// get gas price
+	gasPrice, err := c.suggestedGasPrice(ctx)
+	if err != nil {
+		err := fmt.Errorf("failed to get suggested gas price: %w", err)
+		mTxLogger.Errorf(err.Error())
+		return err
+	}
+
+	// check gas price
+	if gasPrice.Cmp(mTx.GasPrice) == 1 {
+		mTxLogger.Infof("monitored tx (blob? %t) GasPrice updated from %v to %v", isBlobTx, mTx.GasPrice.String(), gasPrice.String())
+		mTx.GasPrice = gasPrice
+	}
+
 	// get gas
 	if mTx.BlobSidecar != nil {
+		// blob gas price estimation
+		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
+		if err != nil {
+			log.Errorf("failed to get parent header: %v", err)
+			return err
+		}
+
+		var blobFeeCap *big.Int
+		if parentHeader.ExcessBlobGas != nil && parentHeader.BlobGasUsed != nil {
+			parentExcessBlobGas := eip4844.CalcExcessBlobGas(*parentHeader.ExcessBlobGas, *parentHeader.BlobGasUsed)
+			blobFeeCap = eip4844.CalcBlobFee(parentExcessBlobGas)
+		} else {
+			log.Infof("legacy parent header no blob gas info")
+			blobFeeCap = eip4844.CalcBlobFee(0)
+		}
+
+		gasTipCap, err := c.etherman.GetSuggestGasTipCap(ctx)
+		if err != nil {
+			log.Errorf("failed to get gas tip cap: %v", err)
+			return err
+		}
+
+		if gasTipCap.Cmp(mTx.GasTipCap) == 1 {
+			mTxLogger.Infof("monitored tx (blob? %t) GasTipCap updated from %v to %v", isBlobTx, mTx.GasTipCap, gasTipCap)
+			mTx.GasTipCap = gasTipCap
+		}
+		if blobFeeCap.Cmp(mTx.BlobGasPrice) == 1 {
+			mTxLogger.Infof("monitored tx (blob? %t) BlobFeeCap updated from %v to %v", isBlobTx, mTx.BlobGasPrice, blobFeeCap)
+			mTx.BlobGasPrice = blobFeeCap
+		}
+
 		gas, err = c.etherman.EstimateGasBlobTx(ctx, mTx.From, mTx.To, mTx.GasPrice, mTx.GasTipCap, mTx.Value, mTx.Data)
 		if err != nil {
 			err := fmt.Errorf("failed to estimate gas blob tx: %w", err)
@@ -770,26 +823,11 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 			return err
 		}
 	}
-	log.Infof("new estimated gas: %d, current one %d", gas, mTx.Gas)
 
 	// check gas
 	if gas > mTx.Gas {
-		mTxLogger.Infof("monitored tx gas updated from %v to %v", mTx.Gas, gas)
+		mTxLogger.Infof("monitored tx (blob? %t) Gas updated from %v to %v", isBlobTx, mTx.Gas, gas)
 		mTx.Gas = gas
-	}
-
-	// get gas price
-	gasPrice, err := c.suggestedGasPrice(ctx)
-	if err != nil {
-		err := fmt.Errorf("failed to get suggested gas price: %w", err)
-		mTxLogger.Errorf(err.Error())
-		return err
-	}
-
-	// check gas price
-	if gasPrice.Cmp(mTx.GasPrice) == 1 {
-		mTxLogger.Infof("monitored tx gas price updated from %v to %v", mTx.GasPrice.String(), gasPrice.String())
-		mTx.GasPrice = gasPrice
 	}
 	return nil
 }

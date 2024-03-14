@@ -127,7 +127,7 @@ func sendBlobTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client,
 	}
 	blobSidecar := ethtxmanager.MakeBlobSidecar([]kzg4844.Blob{blob})
 
-	// data := []byte("0xe46761c4") // pol method
+	// data := []byte{228, 103, 97, 196} // pol method
 	data := []byte{}
 	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(0), data, blobSidecar)
 	if err != nil {
