@@ -244,8 +244,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		gasTipCap = gasTipCap.Mul(gasTipCap, big.NewInt(multiplier))
 		gasPrice = gasPrice.Mul(gasPrice, big.NewInt(multiplier))
 		blobFeeCap = blobFeeCap.Mul(blobFeeCap, big.NewInt(multiplier))
-		gas = gas * 12 / 10
-
+		gas = gas * 12 / 10 //nolint:gomnd
 	} else {
 		// get gas
 		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
@@ -962,6 +961,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 	}
 }
 
+// EncodeBlobData encodes data into blob data type
 func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 	dataLen := len(data)
 	if dataLen > params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1) {
@@ -988,6 +988,7 @@ func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 	return blob, nil
 }
 
+// MakeBlobSidecar constructs a blob tx sidecar
 func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
 	var commitments []kzg4844.Commitment
 	var proofs []kzg4844.Proof
