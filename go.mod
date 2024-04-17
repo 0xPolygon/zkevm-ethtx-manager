@@ -3,7 +3,7 @@ module github.com/0xPolygonHermez/zkevm-ethtx-manager
 go 1.21
 
 require (
-	github.com/ethereum/go-ethereum v1.13.14
+	github.com/ethereum/go-ethereum v1.13.15
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.2.4
 	github.com/invopop/jsonschema v0.12.0
