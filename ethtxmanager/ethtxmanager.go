@@ -400,7 +400,7 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 // get mined
 func (c *Client) Start() {
 	// If no persistence file is uses check L1 for pending txs
-	if c.cfg.PersistenceFilename == "" {
+	if c.cfg.PersistenceFilename == "" && c.cfg.ReadPendingL1Txs {
 		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.from, c.cfg.Etherman.HTTPHeaders)
 		if err != nil {
 			log.Errorf("failed to get pending txs from L1: %v", err)

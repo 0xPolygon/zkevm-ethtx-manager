@@ -60,6 +60,9 @@ type Config struct {
 	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
 	// PersistenceFilename is the filename to store the memory storage
 	PersistenceFilename string `mapstructure:"PersistenceFilename"`
+	// ReadPendingL1Txs is a flag to enable the reading of pending L1 txs
+	// It shouldn't be enabled if PersistenceFilename is not empty
+	ReadPendingL1Txs bool `mapstructure:"ReadPendingL1Txs"`
 	// Etherman configuration
 	Etherman etherman.Config `mapstructure:"Etherman"`
 

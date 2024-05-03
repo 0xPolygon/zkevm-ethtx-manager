@@ -151,3 +151,12 @@ func (s *MemStorage) Update(ctx context.Context, mTx monitoredTx) error {
 	s.persist()
 	return nil
 }
+
+// Empty the storage
+func (s *MemStorage) Empty(ctx context.Context) error {
+	s.TxsMutex.Lock()
+	s.Transactions = make(map[common.Hash]monitoredTx)
+	s.TxsMutex.Unlock()
+	s.persist()
+	return nil
+}

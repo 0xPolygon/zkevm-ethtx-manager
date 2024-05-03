@@ -34,4 +34,5 @@ type storageInterface interface {
 	GetByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]monitoredTx, error)
 	GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]monitoredTx, error)
 	Update(ctx context.Context, mTx monitoredTx) error
+	Empty(ctx context.Context) error
 }
