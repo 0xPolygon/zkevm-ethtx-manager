@@ -313,6 +313,11 @@ func (c *Client) Remove(ctx context.Context, id common.Hash) error {
 	return c.storage.Remove(ctx, id)
 }
 
+// RemoveAll removes all the monitored txs
+func (c *Client) RemoveAll(ctx context.Context) error {
+	return c.storage.Empty(ctx)
+}
+
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
 // if the statuses are empty, all the statuses are considered.
 func (c *Client) ResultsByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]MonitoredTxResult, error) {
