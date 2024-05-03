@@ -63,7 +63,6 @@ type l1Tx struct {
 }
 
 // New creates new eth tx manager
-// func New(cfg Config, ethMan ethermanInterface, storage storageInterface, state stateInterface) *Client {
 func New(cfg Config) (*Client, error) {
 	etherman, err := etherman.NewClient(cfg.Etherman)
 	if err != nil {
@@ -445,12 +444,12 @@ func (c *Client) Start() {
 	}
 }
 
-// Stop will stops the monitored tx management
+// Stop stops the monitored tx management
 func (c *Client) Stop() {
 	c.cancel()
 }
 
-// monitorTxs process all pending monitored tx
+// monitorTxs processes all pending monitored txs
 func (c *Client) monitorTxs(ctx context.Context) error {
 	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
