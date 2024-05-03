@@ -30,6 +30,7 @@ func main() {
 		GasPriceMarginFactor:              1,
 		MaxGasPriceLimit:                  0,
 		PersistenceFilename:               "ethtxmanager-persistence.json",
+		ReadPendingL1Txs:                  false,
 		Log:                               log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
 		PrivateKeys:                       []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
 		Etherman: etherman.Config{

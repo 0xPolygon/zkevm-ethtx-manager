@@ -63,7 +63,6 @@ type l1Tx struct {
 }
 
 // New creates new eth tx manager
-// func New(cfg Config, ethMan ethermanInterface, storage storageInterface, state stateInterface) *Client {
 func New(cfg Config) (*Client, error) {
 	etherman, err := etherman.NewClient(cfg.Etherman)
 	if err != nil {
@@ -313,6 +312,11 @@ func (c *Client) Remove(ctx context.Context, id common.Hash) error {
 	return c.storage.Remove(ctx, id)
 }
 
+// RemoveAll removes all the monitored txs
+func (c *Client) RemoveAll(ctx context.Context) error {
+	return c.storage.Empty(ctx)
+}
+
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
 // if the statuses are empty, all the statuses are considered.
 func (c *Client) ResultsByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]MonitoredTxResult, error) {
@@ -400,7 +404,7 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 // get mined
 func (c *Client) Start() {
 	// If no persistence file is uses check L1 for pending txs
-	if c.cfg.PersistenceFilename == "" {
+	if c.cfg.PersistenceFilename == "" && c.cfg.ReadPendingL1Txs {
 		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.from, c.cfg.Etherman.HTTPHeaders)
 		if err != nil {
 			log.Errorf("failed to get pending txs from L1: %v", err)
@@ -440,12 +444,12 @@ func (c *Client) Start() {
 	}
 }
 
-// Stop will stops the monitored tx management
+// Stop stops the monitored tx management
 func (c *Client) Stop() {
 	c.cancel()
 }
 
-// monitorTxs process all pending monitored tx
+// monitorTxs processes all pending monitored txs
 func (c *Client) monitorTxs(ctx context.Context) error {
 	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
