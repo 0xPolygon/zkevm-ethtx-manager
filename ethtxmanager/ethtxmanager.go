@@ -179,7 +179,7 @@ func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, e
 }
 
 // Add a transaction to be sent and monitored
-func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, sidecar *types.BlobTxSidecar) (common.Hash, error) {
+func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
 	var nonce uint64
 	var err error
 
@@ -285,7 +285,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	mTx := monitoredTx{
 		ID: id, From: c.from, To: to,
 		Nonce: nonce, Value: value, Data: data,
-		Gas: gas, GasPrice: gasPrice,
+		Gas: gas, GasPrice: gasPrice, GasOffset: gasOffset,
 		BlobSidecar:  sidecar,
 		BlobGas:      tx.BlobGas(),
 		BlobGasPrice: blobFeeCap, GasTipCap: gasTipCap,
