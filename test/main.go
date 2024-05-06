@@ -110,7 +110,7 @@ func main() {
 }
 
 func sendTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client, nonce uint64) common.Hash {
-	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(1), []byte{byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}, nil)
+	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(1), []byte{byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}, 0, nil)
 	if err != nil {
 		log.Errorf("Error sending transaction: %s", err)
 	} else {
