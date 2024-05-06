@@ -3,7 +3,7 @@ Stateless manager to send transactions to L1.
 
 ## Main Funtions
 ### Add Transaction
-`func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte) (common.Hash, error)`
+`func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error)`
 
 Adds a transaction to be sent to L1. The returned hash is calculated over the *to*, *nonce*, *value* and *data* fields.
 

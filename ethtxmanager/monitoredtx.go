@@ -122,7 +122,7 @@ func (mTx monitoredTx) Tx() *types.Transaction {
 			Data:       mTx.Data,
 			GasFeeCap:  uint256.MustFromBig(mTx.GasPrice),
 			GasTipCap:  uint256.MustFromBig(mTx.GasTipCap),
-			Gas:        mTx.Gas,
+			Gas:        mTx.Gas + mTx.GasOffset,
 			BlobFeeCap: uint256.MustFromBig(mTx.BlobGasPrice),
 			BlobHashes: mTx.BlobSidecar.BlobHashes(),
 			Sidecar:    mTx.BlobSidecar,
