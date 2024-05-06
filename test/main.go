@@ -130,7 +130,7 @@ func sendBlobTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client,
 
 	// data := []byte{228, 103, 97, 196} // pol method
 	data := []byte{}
-	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(0), data, blobSidecar)
+	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(0), data, 0, blobSidecar)
 	if err != nil {
 		log.Errorf("Error sending Blob transaction: %s", err)
 	} else {
