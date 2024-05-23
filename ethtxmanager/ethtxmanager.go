@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 )
 
@@ -232,6 +233,9 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		// get gas
 		gas, err = c.etherman.EstimateGasBlobTx(ctx, c.from, to, gasPrice, gasTipCap, value, data)
 		if err != nil {
+			if de, ok := err.(rpc.DataError); ok {
+				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+			}
 			err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
 			log.Error(err.Error())
 			log.Debugf("failed to estimate gas for blob tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
@@ -248,6 +252,9 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		// get gas
 		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
 		if err != nil {
+			if de, ok := err.(rpc.DataError); ok {
+				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+			}
 			err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
 			log.Error(err.Error())
 			log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
@@ -814,6 +821,9 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 
 		gas, err = c.etherman.EstimateGasBlobTx(ctx, mTx.From, mTx.To, mTx.GasPrice, mTx.GasTipCap, mTx.Value, mTx.Data)
 		if err != nil {
+			if de, ok := err.(rpc.DataError); ok {
+				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+			}
 			err := fmt.Errorf("failed to estimate gas blob tx: %w", err)
 			mTxLogger.Errorf(err.Error())
 			return err
@@ -821,6 +831,9 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 	} else {
 		gas, err = c.etherman.EstimateGas(ctx, mTx.From, mTx.To, mTx.Value, mTx.Data)
 		if err != nil {
+			if de, ok := err.(rpc.DataError); ok {
+				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+			}
 			err := fmt.Errorf("failed to estimate gas: %w", err)
 			mTxLogger.Errorf(err.Error())
 			return err
