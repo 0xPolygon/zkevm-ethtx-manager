@@ -23,7 +23,8 @@ func main() {
 	config := ethtxmanager.Config{
 		FrequencyToMonitorTxs:             types.Duration{Duration: 1 * time.Second},
 		WaitTxToBeMined:                   types.Duration{Duration: 2 * time.Minute},
-		WaitReceiptToBeGenerated:          types.Duration{Duration: 10 * time.Second},
+		GetReceiptMaxTime:                 types.Duration{Duration: 10 * time.Second},
+		GetReceiptWaitInterval:            types.Duration{Duration: 250 * time.Millisecond},
 		ConsolidationL1ConfirmationBlocks: 5,
 		FinalizationL1ConfirmationBlocks:  10,
 		ForcedGas:                         0,
