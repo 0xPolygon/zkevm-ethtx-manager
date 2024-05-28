@@ -12,8 +12,10 @@ type Config struct {
 	FrequencyToMonitorTxs types.Duration `mapstructure:"FrequencyToMonitorTxs"`
 	// WaitTxToBeMined time to wait after transaction was sent to the ethereum
 	WaitTxToBeMined types.Duration `mapstructure:"WaitTxToBeMined"`
-	// WaitReceiptToBeGenerated time to wait after transaction was mined to get the receipt
-	WaitReceiptToBeGenerated types.Duration `mapstructure:"WaitReceiptToBeGenerated"`
+	// GetReceiptMaxTime is the max time to wait to get the receipt of the mined transaction
+	GetReceiptMaxTime types.Duration `mapstructure:"WaitReceiptMaxTime"`
+	// GetReceiptWaitInterval is the time to sleep before trying to get the receipt of the mined transaction
+	GetReceiptWaitInterval types.Duration `mapstructure:"WaitReceiptCheckInterval"`
 
 	// PrivateKeys defines all the key store files that are going
 	// to be read in order to provide the private keys to sign the L1 txs
