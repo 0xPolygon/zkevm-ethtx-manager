@@ -31,4 +31,5 @@ If the statuses are empty, all the statuses are considered.
 - **Sent**: transaction was sent to L1
 - **Failed**: the tx was already mined and failed with an error that can't be recovered automatically, ex: the data in the tx is invalid and the tx gets reverted
 - **Mined**: the tx was already mined and the receipt status is Successful.
-- **Finalized**: The tx was mined before the configured number of confirmation blocks.
+- **Safe**: The tx was mined and is considered safe.
+- **Finalized**: The tx was mined and is considered finalized.

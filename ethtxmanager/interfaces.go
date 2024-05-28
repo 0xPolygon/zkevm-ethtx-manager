@@ -25,6 +25,7 @@ type ethermanInterface interface {
 	GetLatestBlockNumber(ctx context.Context) (uint64, error)
 	GetHeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	GetSuggestGasTipCap(ctx context.Context) (*big.Int, error)
+	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 }
 
 type storageInterface interface {
