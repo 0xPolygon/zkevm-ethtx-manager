@@ -15,6 +15,7 @@ import (
 
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer/l1_check_block"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -497,13 +498,15 @@ func (c *Client) waitMinedTxToBeConsolidated(ctx context.Context) error {
 
 	log.Debugf("found %v mined monitored tx to process", len(mTxs))
 
-	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
+	// Get Safe block Number
+	safeL1BlockNumberFetch := l1_check_block.NewSafeL1BlockNumberFetch(l1_check_block.SafeBlockNumber, 0)
+	safeBlockNumber, err := safeL1BlockNumberFetch.GetSafeBlockNumber(ctx, c.etherman)
 	if err != nil {
-		return fmt.Errorf("failed to get latest block number: %v", err)
+		return fmt.Errorf("failed to get safe block number: %v", err)
 	}
 
 	for _, mTx := range mTxs {
-		if mTx.BlockNumber.Uint64()+c.cfg.ConsolidationL1ConfirmationBlocks <= currentBlockNumber {
+		if mTx.BlockNumber.Uint64() <= safeBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("consolidated")
 			mTx.Status = MonitoredTxStatusConsolidated
@@ -528,13 +531,15 @@ func (c *Client) waitConsolidatedTxToBeFinalized(ctx context.Context) error {
 
 	log.Debugf("found %v consolidated monitored tx to process", len(mTxs))
 
-	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
+	// Get Finalized block Number
+	safeL1BlockNumberFetch := l1_check_block.NewSafeL1BlockNumberFetch(l1_check_block.FinalizedBlockNumber, 0)
+	finaLizedBlockNumber, err := safeL1BlockNumberFetch.GetSafeBlockNumber(ctx, c.etherman)
 	if err != nil {
-		return fmt.Errorf("failed to get latest block number: %v", err)
+		return fmt.Errorf("failed to get finalized block number: %v", err)
 	}
 
 	for _, mTx := range mTxs {
-		if mTx.BlockNumber.Uint64()+c.cfg.FinalizationL1ConfirmationBlocks <= currentBlockNumber {
+		if mTx.BlockNumber.Uint64() <= finaLizedBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("finalized")
 			mTx.Status = MonitoredTxStatusFinalized
@@ -1011,8 +1016,10 @@ func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
 	var proofs []kzg4844.Proof
 
 	for _, blob := range blobs {
-		c, _ := kzg4844.BlobToCommitment(blob)
-		p, _ := kzg4844.ComputeBlobProof(blob, c)
+		// avoid memory aliasing
+		auxBlob := blob
+		c, _ := kzg4844.BlobToCommitment(&auxBlob)
+		p, _ := kzg4844.ComputeBlobProof(&auxBlob, c)
 
 		commitments = append(commitments, c)
 		proofs = append(proofs, p)

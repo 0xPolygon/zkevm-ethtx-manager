@@ -304,3 +304,9 @@ func (etherMan *Client) GetSuggestGasTipCap(ctx context.Context) (*big.Int, erro
 	gasTipCap, err := etherMan.EthClient.SuggestGasTipCap(ctx)
 	return gasTipCap, err
 }
+
+// HeaderByNumber returns a block header from the current canonical chain. If number is
+// nil, the latest known header is returned.
+func (etherMan *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	return etherMan.EthClient.HeaderByNumber(ctx, number)
+}

@@ -21,18 +21,16 @@ var (
 
 func main() {
 	config := ethtxmanager.Config{
-		FrequencyToMonitorTxs:             types.Duration{Duration: 1 * time.Second},
-		WaitTxToBeMined:                   types.Duration{Duration: 2 * time.Minute},
-		WaitReceiptToBeGenerated:          types.Duration{Duration: 10 * time.Second},
-		ConsolidationL1ConfirmationBlocks: 5,
-		FinalizationL1ConfirmationBlocks:  10,
-		ForcedGas:                         0,
-		GasPriceMarginFactor:              1,
-		MaxGasPriceLimit:                  0,
-		PersistenceFilename:               "ethtxmanager-persistence.json",
-		ReadPendingL1Txs:                  false,
-		Log:                               log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
-		PrivateKeys:                       []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
+		FrequencyToMonitorTxs:    types.Duration{Duration: 1 * time.Second},
+		WaitTxToBeMined:          types.Duration{Duration: 2 * time.Minute},
+		WaitReceiptToBeGenerated: types.Duration{Duration: 10 * time.Second},
+		ForcedGas:                0,
+		GasPriceMarginFactor:     1,
+		MaxGasPriceLimit:         0,
+		PersistenceFilename:      "ethtxmanager-persistence.json",
+		ReadPendingL1Txs:         false,
+		Log:                      log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
+		PrivateKeys:              []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
 			HTTPHeaders:      map[string]string{},
