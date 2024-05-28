@@ -699,16 +699,23 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			return
 		}
 
-		// Wait for the receipt to be available
-		time.Sleep(c.cfg.WaitReceiptToBeGenerated.Duration)
-
-		// get tx receipt
 		var txReceipt *types.Receipt
-		txReceipt, err = c.etherman.GetTxReceipt(ctx, signedTx.Hash())
-		if err != nil {
-			logger.Warnf("failed to get tx receipt for tx %v: %v", signedTx.Hash().String(), err)
-			return
+		waitingReceiptTimeout := time.Now().Add(c.cfg.GetReceiptMaxTime.Duration)
+		// get tx receipt
+		for {
+			txReceipt, err = c.etherman.GetTxReceipt(ctx, signedTx.Hash())
+			if err != nil {
+				if waitingReceiptTimeout.After(time.Now()) {
+					time.Sleep(c.cfg.GetReceiptWaitInterval.Duration)
+				} else {
+					logger.Warnf("failed to get tx receipt for tx %v after %v: %v", signedTx.Hash().String(), c.cfg.GetReceiptMaxTime, err)
+					return
+				}
+			} else {
+				break
+			}
 		}
+
 		lastReceiptChecked = *txReceipt
 	}
 
