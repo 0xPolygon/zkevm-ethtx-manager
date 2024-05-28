@@ -356,13 +356,13 @@ func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult,
 	return c.buildResult(ctx, mTx)
 }
 
-// setStatusConsolidated sets the status of a monitored tx to MonitoredStatusConsolidated.
-func (c *Client) setStatusConsolidated(ctx context.Context, id common.Hash) error {
+// setStatusSafe sets the status of a monitored tx to MonitoredTxStatusSafe.
+func (c *Client) setStatusSafe(ctx context.Context, id common.Hash) error {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	mTx.Status = MonitoredTxStatusConsolidated
+	mTx.Status = MonitoredTxStatusSafe
 	return c.storage.Update(ctx, mTx)
 }
 
@@ -440,13 +440,13 @@ func (c *Client) Start() {
 			if err != nil {
 				c.logErrorAndWait("failed to monitor txs: %v", err)
 			}
-			err = c.waitMinedTxToBeConsolidated(context.Background())
+			err = c.waitMinedTxToBeSafe(context.Background())
 			if err != nil {
-				c.logErrorAndWait("failed to wait consolidated tx to be finalized: %v", err)
+				c.logErrorAndWait("failed to wait safe tx to be finalized: %v", err)
 			}
-			err = c.waitConsolidatedTxToBeFinalized(context.Background())
+			err = c.waitSafeTxToBeFinalized(context.Background())
 			if err != nil {
-				c.logErrorAndWait("failed to wait consolidated tx to be finalized: %v", err)
+				c.logErrorAndWait("failed to wait safe tx to be finalized: %v", err)
 			}
 		}
 	}
@@ -487,9 +487,8 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 	return nil
 }
 
-// waitMinedTxToBeConsolidated checks all consolidated monitored txs and wait the number of
-// l1 blocks configured to consolidated the tx
-func (c *Client) waitMinedTxToBeConsolidated(ctx context.Context) error {
+// waitMinedTxToBeSafe checks all mined monitored txs and wait to set the tx as safe
+func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusMined}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
@@ -508,8 +507,8 @@ func (c *Client) waitMinedTxToBeConsolidated(ctx context.Context) error {
 	for _, mTx := range mTxs {
 		if mTx.BlockNumber.Uint64() <= safeBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
-			mTxLogger.Infof("consolidated")
-			mTx.Status = MonitoredTxStatusConsolidated
+			mTxLogger.Infof("safe")
+			mTx.Status = MonitoredTxStatusSafe
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
 				return fmt.Errorf("failed to update mined monitored tx: %v", err)
@@ -520,16 +519,16 @@ func (c *Client) waitMinedTxToBeConsolidated(ctx context.Context) error {
 	return nil
 }
 
-// waitConsolidatedTxToBeFinalized checks all consolidated monitored txs and wait the number of
+// waitSafeTxToBeFinalized checks all safe monitored txs and wait the number of
 // l1 blocks configured to finalize the tx
-func (c *Client) waitConsolidatedTxToBeFinalized(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusConsolidated}
+func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
+	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusSafe}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
-		return fmt.Errorf("failed to get consolidated monitored txs: %v", err)
+		return fmt.Errorf("failed to get safe monitored txs: %v", err)
 	}
 
-	log.Debugf("found %v consolidated monitored tx to process", len(mTxs))
+	log.Debugf("found %v safe monitored tx to process", len(mTxs))
 
 	// Get Finalized block Number
 	safeL1BlockNumberFetch := l1_check_block.NewSafeL1BlockNumberFetch(l1_check_block.FinalizedBlockNumber, 0)
@@ -545,7 +544,7 @@ func (c *Client) waitConsolidatedTxToBeFinalized(ctx context.Context) error {
 			mTx.Status = MonitoredTxStatusFinalized
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
-				return fmt.Errorf("failed to update consolidated monitored tx: %v", err)
+				return fmt.Errorf("failed to update safe monitored tx: %v", err)
 			}
 		}
 	}
@@ -941,14 +940,14 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 
 			// if the result is confirmed, we set it as done do stop looking into this monitored tx
 			if result.Status == MonitoredTxStatusMined {
-				err := c.setStatusConsolidated(ctx, result.ID)
+				err := c.setStatusSafe(ctx, result.ID)
 				if err != nil {
-					mTxResultLogger.Errorf("failed to set monitored tx as consolidated, err: %v", err)
+					mTxResultLogger.Errorf("failed to set monitored tx as safe, err: %v", err)
 					// if something goes wrong at this point, we skip this result and move to the next.
 					// this result is going to be handled again in the next cycle by the outer loop.
 					continue
 				} else {
-					mTxResultLogger.Info("monitored tx consolidated")
+					mTxResultLogger.Info("monitored tx safe")
 				}
 				resultHandler(result)
 				continue
