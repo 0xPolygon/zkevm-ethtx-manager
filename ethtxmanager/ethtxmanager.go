@@ -699,9 +699,6 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			return
 		}
 
-		// Wait for the receipt to be available
-		time.Sleep(c.cfg.GetReceiptMaxTime.Duration)
-
 		var txReceipt *types.Receipt
 		waitingReceiptTimeout := time.Now().Add(c.cfg.GetReceiptMaxTime.Duration)
 		// get tx receipt
