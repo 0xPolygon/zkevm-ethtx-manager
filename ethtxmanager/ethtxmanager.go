@@ -510,8 +510,8 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 	}
 
 	for _, mTx := range mTxs {
-		if (c.cfg.OverwriteSafeStatusL1NumberOfBlocks == 0 && mTx.BlockNumber.Uint64() <= safeBlockNumber) ||
-			(c.cfg.OverwriteSafeStatusL1NumberOfBlocks > 0 && mTx.BlockNumber.Uint64() <= currentBlockNumber-c.cfg.OverwriteSafeStatusL1NumberOfBlocks) {
+		if (c.cfg.SafeStatusL1NumberOfBlocks == 0 && mTx.BlockNumber.Uint64() <= safeBlockNumber) ||
+			(c.cfg.SafeStatusL1NumberOfBlocks > 0 && mTx.BlockNumber.Uint64() <= currentBlockNumber-c.cfg.SafeStatusL1NumberOfBlocks) {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("safe")
 			mTx.Status = MonitoredTxStatusSafe
@@ -549,8 +549,8 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 	}
 
 	for _, mTx := range mTxs {
-		if (c.cfg.OverwriteFinalizedStatusL1NumberOfBlocks == 0 && mTx.BlockNumber.Uint64() <= finaLizedBlockNumber) ||
-			(c.cfg.OverwriteFinalizedStatusL1NumberOfBlocks > 0 && mTx.BlockNumber.Uint64() <= currentBlockNumber-c.cfg.OverwriteFinalizedStatusL1NumberOfBlocks) {
+		if (c.cfg.FinalizedStatusL1NumberOfBlocks == 0 && mTx.BlockNumber.Uint64() <= finaLizedBlockNumber) ||
+			(c.cfg.FinalizedStatusL1NumberOfBlocks > 0 && mTx.BlockNumber.Uint64() <= currentBlockNumber-c.cfg.FinalizedStatusL1NumberOfBlocks) {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("finalized")
 			mTx.Status = MonitoredTxStatusFinalized
