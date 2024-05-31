@@ -66,4 +66,14 @@ type Config struct {
 
 	// Log configuration
 	Log log.Config `mapstructure:"Log"`
+
+	// OverwriteSafeStatusL1NumberOfBlocks is the number of blocks to consider a tx as safe
+	// overwriting the default value provided by the network
+	// 0 means that the default value will be used
+	OverwriteSafeStatusL1NumberOfBlocks uint64 `mapstructure:"OverwriteSafeStatusL1NumberOfBlocks"`
+
+	// OverwriteFinalizedStatusL1NumberOfBlocks is the number of blocks to consider a tx as finalized
+	// overwriting the default value provided by the network
+	// 0 means that the default value will be used
+	OverwriteFinalizedStatusL1NumberOfBlocks uint64 `mapstructure:"OverwriteFinalizedStatusL1NumberOfBlocks"`
 }

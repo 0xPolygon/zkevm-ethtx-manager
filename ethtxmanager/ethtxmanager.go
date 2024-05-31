@@ -497,6 +497,11 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 
 	log.Debugf("found %v mined monitored tx to process", len(mTxs))
 
+	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get latest block number: %v", err)
+	}
+
 	// Get Safe block Number
 	safeL1BlockNumberFetch := l1_check_block.NewSafeL1BlockNumberFetch(l1_check_block.SafeBlockNumber, 0)
 	safeBlockNumber, err := safeL1BlockNumberFetch.GetSafeBlockNumber(ctx, c.etherman)
@@ -505,7 +510,8 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 	}
 
 	for _, mTx := range mTxs {
-		if mTx.BlockNumber.Uint64() <= safeBlockNumber {
+		if (c.cfg.OverwriteSafeStatusL1NumberOfBlocks == 0 && mTx.BlockNumber.Uint64() <= safeBlockNumber) ||
+			(c.cfg.OverwriteSafeStatusL1NumberOfBlocks > 0 && mTx.BlockNumber.Uint64() <= currentBlockNumber-c.cfg.OverwriteSafeStatusL1NumberOfBlocks) {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("safe")
 			mTx.Status = MonitoredTxStatusSafe
@@ -530,6 +536,11 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 
 	log.Debugf("found %v safe monitored tx to process", len(mTxs))
 
+	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get latest block number: %v", err)
+	}
+
 	// Get Finalized block Number
 	safeL1BlockNumberFetch := l1_check_block.NewSafeL1BlockNumberFetch(l1_check_block.FinalizedBlockNumber, 0)
 	finaLizedBlockNumber, err := safeL1BlockNumberFetch.GetSafeBlockNumber(ctx, c.etherman)
@@ -538,7 +549,8 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 	}
 
 	for _, mTx := range mTxs {
-		if mTx.BlockNumber.Uint64() <= finaLizedBlockNumber {
+		if (c.cfg.OverwriteFinalizedStatusL1NumberOfBlocks == 0 && mTx.BlockNumber.Uint64() <= finaLizedBlockNumber) ||
+			(c.cfg.OverwriteFinalizedStatusL1NumberOfBlocks > 0 && mTx.BlockNumber.Uint64() <= currentBlockNumber-c.cfg.OverwriteFinalizedStatusL1NumberOfBlocks) {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("finalized")
 			mTx.Status = MonitoredTxStatusFinalized
