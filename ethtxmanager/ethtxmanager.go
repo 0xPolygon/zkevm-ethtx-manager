@@ -497,9 +497,12 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 
 	log.Debugf("found %v mined monitored tx to process", len(mTxs))
 
-	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get latest block number: %v", err)
+	currentBlockNumber := uint64(0)
+	if c.cfg.SafeStatusL1NumberOfBlocks > 0 {
+		currentBlockNumber, err = c.etherman.GetLatestBlockNumber(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get latest block number: %v", err)
+		}
 	}
 
 	// Get Safe block Number
@@ -536,9 +539,12 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 
 	log.Debugf("found %v safe monitored tx to process", len(mTxs))
 
-	currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get latest block number: %v", err)
+	currentBlockNumber := uint64(0)
+	if c.cfg.SafeStatusL1NumberOfBlocks > 0 {
+		currentBlockNumber, err = c.etherman.GetLatestBlockNumber(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get latest block number: %v", err)
+		}
 	}
 
 	// Get Finalized block Number
