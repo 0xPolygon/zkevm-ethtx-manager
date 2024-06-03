@@ -1,5 +1,5 @@
-github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.4.0 h1:RoEQ9IEZqr5OXP1egWbEF6urQq+frdj+17JeteMIJfA=
-github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.4.0/go.mod h1:+5qELbp9l/AsnfwMiCl51YCGfvAfaTqVwOKrmWNJoOs=
+github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.4.1 h1:qV0h6sSsWfZp44AOav5JPMvF/sPBh8vAV96Q47Hv/yU=
+github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.4.1/go.mod h1:+5qELbp9l/AsnfwMiCl51YCGfvAfaTqVwOKrmWNJoOs=
 github.com/DataDog/zstd v1.5.2 h1:vUG4lAyuPCXO0TLbXvPv7EB7cNK1QV/luu55UHLrrn8=
 github.com/DataDog/zstd v1.5.2/go.mod h1:g4AWEaM3yOg3HYfnJ3YIawPnVdXJh9QME85blwSAmyw=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
