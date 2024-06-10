@@ -508,8 +508,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 		safeBlockNumber = currentBlockNumber - c.cfg.SafeStatusL1NumberOfBlocks
 	} else {
 		// Get Safe block Number
-		safeL1BlockNumberFetch := l1_check_block.NewSafeL1BlockNumberFetch(l1_check_block.SafeBlockNumber, 0)
-		safeBlockNumber, err = safeL1BlockNumberFetch.GetSafeBlockNumber(ctx, c.etherman)
+		safeBlockNumber, err = l1_check_block.L1SafeFetch.BlockNumber(ctx, c.etherman)
 		if err != nil {
 			return fmt.Errorf("failed to get safe block number: %v", err)
 		}
@@ -552,8 +551,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 		finaLizedBlockNumber = currentBlockNumber - c.cfg.FinalizedStatusL1NumberOfBlocks
 	} else {
 		// Get Network Default value
-		safeL1BlockNumberFetch := l1_check_block.NewSafeL1BlockNumberFetch(l1_check_block.FinalizedBlockNumber, 0)
-		finaLizedBlockNumber, err = safeL1BlockNumberFetch.GetSafeBlockNumber(ctx, c.etherman)
+		finaLizedBlockNumber, err = l1_check_block.L1FinalizedFetch.BlockNumber(ctx, c.etherman)
 		if err != nil {
 			return fmt.Errorf("failed to get finalized block number: %v", err)
 		}

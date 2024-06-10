@@ -3,7 +3,7 @@ module github.com/0xPolygonHermez/zkevm-ethtx-manager
 go 1.21.3
 
 require (
-	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.4.0
+	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.5.1
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.2.4
@@ -46,7 +46,7 @@ require (
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/klauspost/compress v1.17.0 // indirect
+	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
