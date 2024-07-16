@@ -100,6 +100,9 @@ type monitoredTx struct {
 
 	// UpdatedAt last date time it was updated
 	UpdatedAt time.Time `mapstructure:"updatedAt"`
+
+	// EstimateGas indicates if gas should be estimated or last value shold be reused
+	EstimateGas bool `mapstructure:"estimateGas"`
 }
 
 // Tx uses the current information to build a tx
