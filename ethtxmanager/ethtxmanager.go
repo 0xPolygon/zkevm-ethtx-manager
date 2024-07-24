@@ -182,6 +182,15 @@ func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, e
 
 // Add a transaction to be sent and monitored
 func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
+	return c.add(ctx, to, forcedNonce, value, data, gasOffset, sidecar, 0)
+}
+
+// AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
+func (c *Client) AddWithGas(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+	return c.add(ctx, to, forcedNonce, value, data, gasOffset, sidecar, gas)
+}
+
+func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
 	var nonce uint64
 	var err error
 
@@ -205,9 +214,12 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		return common.Hash{}, err
 	}
 
-	var gas uint64
 	var blobFeeCap *big.Int
 	var gasTipCap *big.Int
+	var estimateGas bool
+	if gas == 0 {
+		estimateGas = true
+	}
 
 	if sidecar != nil {
 		// blob gas price estimation
@@ -232,15 +244,17 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		}
 
 		// get gas
-		gas, err = c.etherman.EstimateGasBlobTx(ctx, c.from, to, gasPrice, gasTipCap, value, data)
-		if err != nil {
-			if de, ok := err.(rpc.DataError); ok {
-				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+		if estimateGas {
+			gas, err = c.etherman.EstimateGasBlobTx(ctx, c.from, to, gasPrice, gasTipCap, value, data)
+			if err != nil {
+				if de, ok := err.(rpc.DataError); ok {
+					err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+				}
+				err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
+				log.Error(err.Error())
+				log.Debugf("failed to estimate gas for blob tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
+				return common.Hash{}, err
 			}
-			err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
-			log.Error(err.Error())
-			log.Debugf("failed to estimate gas for blob tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
-			return common.Hash{}, err
 		}
 
 		// margin
@@ -249,7 +263,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		gasPrice = gasPrice.Mul(gasPrice, big.NewInt(multiplier))
 		blobFeeCap = blobFeeCap.Mul(blobFeeCap, big.NewInt(multiplier))
 		gas = gas * 12 / 10 //nolint:gomnd
-	} else {
+	} else if estimateGas {
 		// get gas
 		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
 		if err != nil {
@@ -297,8 +311,9 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		BlobSidecar:  sidecar,
 		BlobGas:      tx.BlobGas(),
 		BlobGasPrice: blobFeeCap, GasTipCap: gasTipCap,
-		Status:  MonitoredTxStatusCreated,
-		History: make(map[common.Hash]bool),
+		Status:      MonitoredTxStatusCreated,
+		History:     make(map[common.Hash]bool),
+		EstimateGas: estimateGas,
 	}
 
 	// add to storage
@@ -818,6 +833,10 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 	}
 
 	// get gas
+	if !mTx.EstimateGas {
+		mTxLogger.Info("tx is using a hardcoded gas, avoiding estimate gas")
+		return nil
+	}
 	if mTx.BlobSidecar != nil {
 		// blob gas price estimation
 		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
