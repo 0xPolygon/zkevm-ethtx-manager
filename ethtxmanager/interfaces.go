@@ -26,6 +26,7 @@ type ethermanInterface interface {
 	GetHeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	GetSuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
+	GetZkEVMAddressAndL1ChainID() (common.Address, common.Address, uint64, error)
 }
 
 type storageInterface interface {

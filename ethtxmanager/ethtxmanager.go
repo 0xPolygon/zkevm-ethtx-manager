@@ -660,7 +660,14 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 		logger.Debugf("unsigned tx %v created", tx.Hash().String())
 
 		// sign tx
-		signedTx, err = c.etherman.SignTx(ctx, mTx.From, tx)
+		if c.cfg.CustodialAssets.Enable { // X Layer
+			signedTx, err = c.signTx(mTx, tx)
+			if err != nil {
+				logger.Fatalf("failed to sign tx %v: %v", tx.Hash().String(), err)
+			}
+		} else {
+			signedTx, err = c.etherman.SignTx(ctx, mTx.From, tx)
+		}
 		if err != nil {
 			logger.Errorf("failed to sign tx %v: %v", tx.Hash().String(), err)
 			return

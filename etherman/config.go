@@ -1,6 +1,9 @@
 package etherman
 
-import "github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
+import (
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // Config represents the configuration of the etherman
 type Config struct {
@@ -15,4 +18,9 @@ type Config struct {
 	L1ChainID uint64 `mapstructure:"L1ChainID"`
 	// HTTPHeaders are the headers to be used in the HTTP requests
 	HTTPHeaders map[string]string `mapstructure:"HTTPHeaders"`
+	// X Layer
+	// ZkEVMAddr Address of the L1 contract polygonZkEVMAddress
+	ZkEVMAddr common.Address `json:"polygonZkEVMAddress"`
+	// RollupManagerAddr Address of the L1 contract
+	RollupManagerAddr common.Address `json:"polygonRollupManagerAddress"`
 }
