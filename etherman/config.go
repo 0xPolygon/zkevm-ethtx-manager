@@ -20,7 +20,7 @@ type Config struct {
 	HTTPHeaders map[string]string `mapstructure:"HTTPHeaders"`
 	// X Layer
 	// ZkEVMAddr Address of the L1 contract polygonZkEVMAddress
-	ZkEVMAddr common.Address `json:"polygonZkEVMAddress"`
+	ZkEVMAddr common.Address `mapstructure:"PolygonZkEVMAddress"`
 	// RollupManagerAddr Address of the L1 contract
-	RollupManagerAddr common.Address `json:"polygonRollupManagerAddress"`
+	RollupManagerAddr common.Address `mapstructure:"PolygonRollupManagerAddress"`
 }

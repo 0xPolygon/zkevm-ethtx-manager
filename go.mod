@@ -5,6 +5,7 @@ go 1.21.3
 require (
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.5.4
 	github.com/ethereum/go-ethereum v1.14.5
+	github.com/google/uuid v1.5.0
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.2.4
 	github.com/invopop/jsonschema v0.12.0
@@ -43,7 +44,6 @@ require (
 	github.com/gofrs/flock v0.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
-	github.com/google/uuid v1.5.0 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
