@@ -65,27 +65,34 @@ type l1Tx struct {
 }
 
 // New creates new eth tx manager
-func New(cfg Config) (*Client, error) {
+func New(cfg Config, from common.Address) (*Client, error) {
 	etherman, err := etherman.NewClient(cfg.Etherman)
 	if err != nil {
 		return nil, err
 	}
 
-	auth, err := etherman.LoadAuthFromKeyStore(cfg.PrivateKeys[0].Path, cfg.PrivateKeys[0].Password)
-	if err != nil {
-		return nil, err
-	}
+	//  For X Layer custodial signature
+	if !cfg.CustodialAssets.Enable {
+		auth, err := etherman.LoadAuthFromKeyStore(cfg.PrivateKeys[0].Path, cfg.PrivateKeys[0].Password)
+		if err != nil {
+			return nil, err
+		}
 
-	err = etherman.AddOrReplaceAuth(*auth)
-	if err != nil {
-		return nil, err
+		err = etherman.AddOrReplaceAuth(*auth)
+		if err != nil {
+			return nil, err
+		}
+
+		if auth.From != from {
+			return nil, fmt.Errorf(fmt.Sprintf("private key does not match the from address, %v,%v", auth.From, from))
+		}
 	}
 
 	client := Client{
 		cfg:      cfg,
 		etherman: etherman,
 		storage:  NewMemStorage(cfg.PersistenceFilename),
-		from:     auth.From,
+		from:     from,
 	}
 
 	log.Init(cfg.Log)
