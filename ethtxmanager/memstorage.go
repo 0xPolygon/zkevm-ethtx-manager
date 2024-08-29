@@ -55,7 +55,7 @@ func (s *MemStorage) persist() {
 		s.FileMutex.Lock()
 		defer s.FileMutex.Unlock()
 		jsonFile, _ := json.Marshal(s.Transactions)
-		err := os.WriteFile(s.PersistenceFilename+".tmp", jsonFile, 0644) // nolint:gosec, gomnd
+		err := os.WriteFile(s.PersistenceFilename+".tmp", jsonFile, 0644) //nolint:gosec, gomnd
 		if err != nil {
 			log.Error(err)
 		}

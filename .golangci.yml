@@ -16,6 +16,19 @@ linters:
   - goimports
   - revive
   - unconvert
+  - prealloc
+  - predeclared
+  - nolintlint 
+  - makezero
+  - importas
+  - dogsled
+  - errname
+  - goconst
+  - forcetypeassert
+  - tparallel
+  - thelper
+  - errcheck
+  - lll
 
 linters-settings:
   revive:
@@ -23,6 +36,9 @@ linters-settings:
     - name: exported
       arguments:
       - disableStutteringCheck
+  goconst:
+    min-len: 3
+    min-occurrences: 3
 
 issues:
   include:

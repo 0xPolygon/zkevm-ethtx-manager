@@ -94,7 +94,7 @@ func EncodeBigInt(b *big.Int) *string {
 // into a *big.Int
 func DecodeBigIntHexOrDecimal(s string) (*big.Int, error) {
 	var r *big.Int
-	if strings.HasPrefix(s, "0x") { // nolint
+	if strings.HasPrefix(s, "0x") {
 		// Value in hex format
 		s = s[2:]
 		r = new(big.Int).SetBytes(common.Hex2Bytes(s))

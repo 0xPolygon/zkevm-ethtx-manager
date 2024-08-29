@@ -181,16 +181,42 @@ func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, e
 }
 
 // Add a transaction to be sent and monitored
-func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
+func (c *Client) Add(
+	ctx context.Context,
+	to *common.Address,
+	forcedNonce *uint64,
+	value *big.Int,
+	data []byte,
+	gasOffset uint64,
+	sidecar *types.BlobTxSidecar,
+) (common.Hash, error) {
 	return c.add(ctx, to, forcedNonce, value, data, gasOffset, sidecar, 0)
 }
 
 // AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
-func (c *Client) AddWithGas(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+func (c *Client) AddWithGas(
+	ctx context.Context,
+	to *common.Address,
+	forcedNonce *uint64,
+	value *big.Int,
+	data []byte,
+	gasOffset uint64,
+	sidecar *types.BlobTxSidecar,
+	gas uint64,
+) (common.Hash, error) {
 	return c.add(ctx, to, forcedNonce, value, data, gasOffset, sidecar, gas)
 }
 
-func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+func (c *Client) add(
+	ctx context.Context,
+	to *common.Address,
+	forcedNonce *uint64,
+	value *big.Int,
+	data []byte,
+	gasOffset uint64,
+	sidecar *types.BlobTxSidecar,
+	gas uint64,
+) (common.Hash, error) {
 	var nonce uint64
 	var err error
 
@@ -252,7 +278,12 @@ func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint6
 				}
 				err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
 				log.Error(err.Error())
-				log.Debugf("failed to estimate gas for blob tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
+				log.Debugf(
+					"failed to estimate gas for blob tx: from: %v, to: %v, value: %v",
+					c.from.String(),
+					to.String(),
+					value.String(),
+				)
 				return common.Hash{}, err
 			}
 		}
@@ -272,7 +303,12 @@ func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint6
 			}
 			err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
 			log.Error(err.Error())
-			log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
+			log.Debugf(
+				"failed to estimate gas for tx: from: %v, to: %v, value: %v",
+				c.from.String(),
+				to.String(),
+				value.String(),
+			)
 			if c.cfg.ForcedGas > 0 {
 				gas = c.cfg.ForcedGas
 			} else {
@@ -747,7 +783,12 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 				if waitingReceiptTimeout.After(time.Now()) {
 					time.Sleep(c.cfg.GetReceiptWaitInterval.Duration)
 				} else {
-					logger.Warnf("failed to get tx receipt for tx %v after %v: %v", signedTx.Hash().String(), c.cfg.GetReceiptMaxTime, err)
+					logger.Warnf(
+						"failed to get tx receipt for tx %v after %v: %v",
+						signedTx.Hash().String(),
+						c.cfg.GetReceiptMaxTime,
+						err,
+					)
 					return
 				}
 			} else {
@@ -802,7 +843,11 @@ func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt type
 		if err.Error() == ErrExecutionReverted.Error() {
 			return true
 		} else {
-			log.Errorf("failed to get revert message for monitored tx identified as failed, tx %v: %v", receipt.TxHash.String(), err)
+			log.Errorf(
+				"failed to get revert message for monitored tx identified as failed, tx %v: %v",
+				receipt.TxHash.String(),
+				err,
+			)
 		}
 	}
 	// if nothing weird was found, stop monitoring
@@ -828,7 +873,12 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 
 	// check gas price
 	if gasPrice.Cmp(mTx.GasPrice) == 1 {
-		mTxLogger.Infof("monitored tx (blob? %t) GasPrice updated from %v to %v", isBlobTx, mTx.GasPrice.String(), gasPrice.String())
+		mTxLogger.Infof(
+			"monitored tx (blob? %t) GasPrice updated from %v to %v",
+			isBlobTx,
+			mTx.GasPrice.String(),
+			gasPrice.String(),
+		)
 		mTx.GasPrice = gasPrice
 	}
 
@@ -1032,7 +1082,11 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 	dataLen := len(data)
 	if dataLen > params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1) {
-		log.Infof("blob data longer than allowed (length: %v, limit: %v)", dataLen, params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1))
+		log.Infof(
+			"blob data longer than allowed (length: %v, limit: %v)",
+			dataLen,
+			params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1),
+		)
 		return kzg4844.Blob{}, errors.New("blob data longer than allowed")
 	}
 
@@ -1057,8 +1111,8 @@ func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 
 // MakeBlobSidecar constructs a blob tx sidecar
 func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
-	var commitments []kzg4844.Commitment
-	var proofs []kzg4844.Proof
+	commitments := make([]kzg4844.Commitment, 0, len(blobs))
+	proofs := make([]kzg4844.Proof, 0, len(blobs))
 
 	for _, blob := range blobs {
 		// avoid memory aliasing
