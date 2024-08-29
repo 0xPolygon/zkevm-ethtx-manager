@@ -293,7 +293,7 @@ func (c *Client) add(
 		gasTipCap = gasTipCap.Mul(gasTipCap, big.NewInt(multiplier))
 		gasPrice = gasPrice.Mul(gasPrice, big.NewInt(multiplier))
 		blobFeeCap = blobFeeCap.Mul(blobFeeCap, big.NewInt(multiplier))
-		gas = gas * 12 / 10 //nolint:gomnd
+		gas = gas * 12 / 10 //nolint:mnd
 	} else if estimateGas {
 		// get gas
 		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
@@ -548,7 +548,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 
 	log.Debugf("found %v mined monitored tx to process", len(mTxs))
 
-	safeBlockNumber := uint64(0)
+	var safeBlockNumber uint64
 	if c.cfg.SafeStatusL1NumberOfBlocks > 0 {
 		// Overwrite the number of blocks to consider a tx as safe
 		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
@@ -591,7 +591,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 
 	log.Debugf("found %v safe monitored tx to process", len(mTxs))
 
-	finaLizedBlockNumber := uint64(0)
+	var finaLizedBlockNumber uint64
 	if c.cfg.SafeStatusL1NumberOfBlocks > 0 {
 		// Overwrite the number of blocks to consider a tx as finalized
 		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
