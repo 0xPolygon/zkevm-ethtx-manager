@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/encoding"
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/common"
 )
 
 type etherscanResponse struct {
@@ -73,6 +73,6 @@ func (e *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	if err != nil {
 		return big.NewInt(0), fmt.Errorf("Reading body failed: %w", err)
 	}
-	fgp, _ := big.NewInt(0).SetString(resBody.Result.FastGasPrice, encoding.Base10)
-	return new(big.Int).Mul(fgp, big.NewInt(encoding.Gwei)), nil
+	fgp, _ := big.NewInt(0).SetString(resBody.Result.FastGasPrice, common.Base10)
+	return new(big.Int).Mul(fgp, big.NewInt(common.Gwei)), nil
 }
