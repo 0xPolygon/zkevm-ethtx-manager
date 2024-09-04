@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/stretchr/testify/assert"
 )
@@ -75,4 +76,22 @@ func TestBlobTx(t *testing.T) {
 	assert.Equal(t, blobSidecar, tx.BlobTxSidecar())
 	assert.Equal(t, blobGas, tx.BlobGas())
 	assert.Equal(t, blobGasPrice, tx.BlobGasFeeCap())
+}
+
+func TestAddHistory(t *testing.T) {
+	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
+	mTx := monitoredTx{
+		History: make(map[common.Hash]bool),
+	}
+
+	err := mTx.AddHistory(tx)
+	assert.NoError(t, err)
+
+	// Adding the same transaction again should return an error
+	err = mTx.AddHistory(tx)
+	assert.ErrorContains(t, err, "already exists")
+
+	// should have only one history
+	historySlice := mTx.historyHashSlice()
+	assert.Len(t, historySlice, 1)
 }

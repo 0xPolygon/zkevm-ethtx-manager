@@ -22,7 +22,22 @@ func init() {
 
 func TestGetGasPrice(t *testing.T) {
 	ctx := context.Background()
-	data := `{"baseFee":10,"blockNumber":15817089,"blockTime":11.88,"gasPrice":{"fast":11,"instant":66,"standard":10},"nextBaseFee":10,"priorityFee":{"fast":2,"instant":2,"standard":1}}`
+	data := `{
+		"baseFee":10,
+		"blockNumber":15817089,
+		"blockTime":11.88,
+		"gasPrice":{
+			"fast":11,
+			"instant":66,
+			"standard":10
+			},
+		"nextBaseFee":10,
+		"priorityFee":{
+			"fast":2,
+			"instant":2,
+			"standard":1
+			}
+	}`
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, data)
 	}))
