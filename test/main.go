@@ -6,10 +6,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/ethtxmanager"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/config/types"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )

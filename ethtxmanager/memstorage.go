@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum/common"
 )
 

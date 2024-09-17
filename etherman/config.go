@@ -1,6 +1,6 @@
 package etherman
 
-import "github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
+import "github.com/0xPolygon/zkevm-ethtx-manager/etherman/etherscan"
 
 // Config represents the configuration of the etherman
 type Config struct {

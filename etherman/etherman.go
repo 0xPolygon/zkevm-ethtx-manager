@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/ethgasstation"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/etherscan"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/ethgasstation"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"

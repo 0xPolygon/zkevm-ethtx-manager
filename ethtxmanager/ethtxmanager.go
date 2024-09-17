@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer/l1_check_block"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
