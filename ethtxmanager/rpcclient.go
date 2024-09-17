@@ -123,7 +123,7 @@ func JSONRPCBatchCall(url string, httpHeaders map[string]string, calls ...BatchC
 	err = json.Unmarshal(resBody, &res)
 	if err != nil {
 		errorMessage := string(resBody)
-		return nil, fmt.Errorf(errorMessage)
+		return nil, fmt.Errorf("%s", errorMessage)
 	}
 
 	return res, nil
