@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/common"
+	"github.com/0xPolygon/zkevm-ethtx-manager/common"
 )
 
 type etherscanResponse struct {

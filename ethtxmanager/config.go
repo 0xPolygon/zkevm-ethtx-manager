@@ -1,9 +1,9 @@
 package ethtxmanager
 
 import (
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/config/types"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 )
 
 // Config is configuration for ethereum transaction manager
