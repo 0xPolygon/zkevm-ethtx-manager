@@ -117,6 +117,17 @@ func (s *MemStorage) GetByStatus(ctx context.Context, statuses []MonitoredTxStat
 			mTxs = append(mTxs, mTx)
 		}
 	}
+
+	// ensure the transactions are ordered by creation date
+	// (oldest first)
+	for i := 0; i < len(mTxs); i++ {
+		for j := i + 1; j < len(mTxs); j++ {
+			if mTxs[i].CreatedAt.After(mTxs[j].CreatedAt) {
+				mTxs[i], mTxs[j] = mTxs[j], mTxs[i]
+			}
+		}
+	}
+
 	return mTxs, nil
 }
 

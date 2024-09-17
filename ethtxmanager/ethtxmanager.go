@@ -1100,11 +1100,11 @@ func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 		if fieldIndex == params.BlobTxFieldElementsPerBlob {
 			break
 		}
-		max := i + (elemSize - 1)
-		if max > len(data) {
-			max = len(data)
+		maxIndex := i + (elemSize - 1)
+		if maxIndex > len(data) {
+			maxIndex = len(data)
 		}
-		copy(blob[fieldIndex*elemSize+1:], data[i:max])
+		copy(blob[fieldIndex*elemSize+1:], data[i:maxIndex])
 	}
 	return blob, nil
 }
