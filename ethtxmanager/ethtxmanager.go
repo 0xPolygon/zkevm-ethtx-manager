@@ -44,10 +44,11 @@ type Client struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg      Config
-	etherman ethermanInterface
-	storage  storageInterface
-	from     common.Address
+	cfg        Config
+	etherman   ethermanInterface
+	storage    storageInterface
+	from       common.Address
+	nonceMutex sync.Mutex
 }
 
 type pending struct {
@@ -154,6 +155,8 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 
 // getTxNonce get the nonce for the given account
 func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, error) {
+	c.nonceMutex.Lock()
+	defer c.nonceMutex.Unlock()
 	// Get created transactions from the database for the given account
 	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
 	if err != nil {
@@ -316,7 +319,6 @@ func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		EstimateGas: estimateGas,
 	}
 
-	// add to storage
 	err = c.storage.Add(ctx, mTx)
 	if err != nil {
 		err := fmt.Errorf("failed to add tx to get monitored: %w", err)
