@@ -104,8 +104,8 @@ func (s *MemStorage) Get(ctx context.Context, id common.Hash) (monitoredTx, erro
 // GetByStatus loads all monitored tx that match the provided status
 func (s *MemStorage) GetByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]monitoredTx, error) {
 	mTxs := []monitoredTx{}
-	s.TxsMutex.RLock()
-	defer s.TxsMutex.RUnlock()
+	s.TxsMutex.Lock()
+	defer s.TxsMutex.Unlock()
 	for _, mTx := range s.Transactions {
 		if len(statuses) > 0 {
 			for _, status := range statuses {
