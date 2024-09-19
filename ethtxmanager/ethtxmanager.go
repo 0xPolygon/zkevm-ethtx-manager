@@ -158,9 +158,9 @@ func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, e
 	c.nonceMutex.Lock()
 	defer c.nonceMutex.Unlock()
 	// Get created transactions from the database for the given account
-	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
+	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent})
 	if err != nil {
-		return 0, fmt.Errorf("failed to get created monitored txs: %w", err)
+		return 0, fmt.Errorf("failed to get monitored txs in getTxNonce: %w", err)
 	}
 
 	var nonce uint64
