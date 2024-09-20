@@ -158,29 +158,33 @@ func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, e
 	c.nonceMutex.Lock()
 	defer c.nonceMutex.Unlock()
 	// Get created transactions from the database for the given account
-	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
+	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent, MonitoredTxStatusFailed})
 	if err != nil {
-		return 0, fmt.Errorf("failed to get created monitored txs: %w", err)
+		return 0, fmt.Errorf("failed to get monitored txs in getTxNonce: %w", err)
 	}
 
-	var nonce uint64
+	var localNonce, pendingNonce uint64
 	if len(createdTxs) > 0 {
 		// if there are pending txs, we adjust the nonce accordingly
 		for _, createdTx := range createdTxs {
-			if createdTx.Nonce > nonce {
-				nonce = createdTx.Nonce
+			if createdTx.Nonce > localNonce {
+				localNonce = createdTx.Nonce
 			}
 		}
 
-		nonce++
-	} else {
-		// if there are no pending txs, we get the pending nonce from the etherman
-		if nonce, err = c.etherman.PendingNonce(ctx, from); err != nil {
-			return 0, fmt.Errorf("failed to get pending nonce: %w", err)
-		}
+		localNonce++
 	}
 
-	return nonce, nil
+	// if there are no pending txs, we get the pending nonce from the etherman
+	if pendingNonce, err = c.etherman.PendingNonce(ctx, from); err != nil {
+		return 0, fmt.Errorf("failed to get pending nonce: %w", err)
+	}
+
+	if pendingNonce > localNonce {
+		return pendingNonce, nil
+	}
+
+	return localNonce, nil
 }
 
 // Add a transaction to be sent and monitored
