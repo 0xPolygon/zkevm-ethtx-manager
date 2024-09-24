@@ -1,4 +1,4 @@
-package ethtxmanager
+package types
 
 import (
 	"context"
@@ -41,9 +41,9 @@ func (s MonitoredTxStatus) String() string {
 	return string(s)
 }
 
-// monitoredTx represents a set of information used to build tx
+// MonitoredTx represents a set of information used to build tx
 // plus information to monitor if the transactions was sent successfully
-type monitoredTx struct {
+type MonitoredTx struct {
 	// ID is the tx identifier controller by the caller
 	ID common.Hash `mapstructure:"id"`
 
@@ -107,7 +107,7 @@ type monitoredTx struct {
 }
 
 // Tx uses the current information to build a tx
-func (mTx monitoredTx) Tx() *types.Transaction {
+func (mTx MonitoredTx) Tx() *types.Transaction {
 	var tx *types.Transaction
 	if mTx.BlobSidecar == nil {
 		tx = types.NewTx(&types.LegacyTx{
@@ -137,7 +137,7 @@ func (mTx monitoredTx) Tx() *types.Transaction {
 }
 
 // AddHistory adds a transaction to the monitoring history
-func (mTx monitoredTx) AddHistory(tx *types.Transaction) error {
+func (mTx MonitoredTx) AddHistory(tx *types.Transaction) error {
 	if _, found := mTx.History[tx.Hash()]; found {
 		return ErrAlreadyExists
 	}
@@ -145,8 +145,8 @@ func (mTx monitoredTx) AddHistory(tx *types.Transaction) error {
 	return nil
 }
 
-// historyHashSlice returns the current history field as a string slice
-func (mTx *monitoredTx) historyHashSlice() []common.Hash {
+// HistoryHashSlice returns the current history field as a string slice
+func (mTx *MonitoredTx) HistoryHashSlice() []common.Hash {
 	history := make([]common.Hash, 0, len(mTx.History))
 	for h := range mTx.History {
 		history = append(history, h)

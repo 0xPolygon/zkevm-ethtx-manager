@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -15,13 +16,13 @@ import (
 type MemStorage struct {
 	TxsMutex            sync.RWMutex
 	FileMutex           sync.RWMutex
-	Transactions        map[common.Hash]monitoredTx
+	Transactions        map[common.Hash]types.MonitoredTx
 	PersistenceFilename string
 }
 
 // NewMemStorage creates a new instance of storage
 func NewMemStorage(persistenceFilename string) *MemStorage {
-	transactions := make(map[common.Hash]monitoredTx)
+	transactions := make(map[common.Hash]types.MonitoredTx)
 	if persistenceFilename != "" {
 		// Check if the file exists
 		if _, err := os.Stat(persistenceFilename); os.IsNotExist(err) {
@@ -67,7 +68,7 @@ func (s *MemStorage) persist() {
 }
 
 // Add persist a monitored tx
-func (s *MemStorage) Add(ctx context.Context, mTx monitoredTx) error {
+func (s *MemStorage) Add(ctx context.Context, mTx types.MonitoredTx) error {
 	mTx.CreatedAt = time.Now()
 	s.TxsMutex.Lock()
 	if _, exists := s.Transactions[mTx.ID]; exists {
@@ -92,18 +93,18 @@ func (s *MemStorage) Remove(ctx context.Context, id common.Hash) error {
 }
 
 // Get loads a persisted monitored tx
-func (s *MemStorage) Get(ctx context.Context, id common.Hash) (monitoredTx, error) {
+func (s *MemStorage) Get(ctx context.Context, id common.Hash) (types.MonitoredTx, error) {
 	s.TxsMutex.RLock()
 	defer s.TxsMutex.RUnlock()
 	if mTx, exists := s.Transactions[id]; exists {
 		return mTx, nil
 	}
-	return monitoredTx{}, ErrNotFound
+	return types.MonitoredTx{}, ErrNotFound
 }
 
 // GetByStatus loads all monitored tx that match the provided status
-func (s *MemStorage) GetByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]monitoredTx, error) {
-	mTxs := []monitoredTx{}
+func (s *MemStorage) GetByStatus(ctx context.Context, statuses []types.MonitoredTxStatus) ([]types.MonitoredTx, error) {
+	mTxs := []types.MonitoredTx{}
 	s.TxsMutex.RLock()
 	defer s.TxsMutex.RUnlock()
 	for _, mTx := range s.Transactions {
@@ -133,8 +134,8 @@ func (s *MemStorage) GetByStatus(ctx context.Context, statuses []MonitoredTxStat
 
 // GetByBlock loads all monitored tx that have the blockNumber between
 // fromBlock and toBlock
-func (s *MemStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]monitoredTx, error) {
-	mTxs := []monitoredTx{}
+func (s *MemStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]types.MonitoredTx, error) {
+	mTxs := []types.MonitoredTx{}
 	s.TxsMutex.RLock()
 	defer s.TxsMutex.RUnlock()
 	for _, mTx := range s.Transactions {
@@ -150,7 +151,7 @@ func (s *MemStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64)
 }
 
 // Update a persisted monitored tx
-func (s *MemStorage) Update(ctx context.Context, mTx monitoredTx) error {
+func (s *MemStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 	mTx.UpdatedAt = time.Now()
 	s.TxsMutex.Lock()
 
@@ -166,7 +167,7 @@ func (s *MemStorage) Update(ctx context.Context, mTx monitoredTx) error {
 // Empty the storage
 func (s *MemStorage) Empty(ctx context.Context) error {
 	s.TxsMutex.Lock()
-	s.Transactions = make(map[common.Hash]monitoredTx)
+	s.Transactions = make(map[common.Hash]types.MonitoredTx)
 	s.TxsMutex.Unlock()
 	s.persist()
 	return nil

@@ -10,6 +10,7 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
+	coreTypes "github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
@@ -70,7 +71,7 @@ func main() {
 
 		x := 0
 		for x < len(results) {
-			if results[x].Status != ethtxmanager.MonitoredTxStatusFinalized {
+			if results[x].Status != coreTypes.MonitoredTxStatusFinalized {
 				log.Debugf("Tx %s not finalized yet: %s", results[x].ID, results[x].Status)
 				break
 			}
@@ -84,7 +85,7 @@ func main() {
 	}
 
 	// Clean up
-	results, err := client.ResultsByStatus(ctx, []ethtxmanager.MonitoredTxStatus{ethtxmanager.MonitoredTxStatusFinalized})
+	results, err := client.ResultsByStatus(ctx, []coreTypes.MonitoredTxStatus{coreTypes.MonitoredTxStatusFinalized})
 	if err != nil {
 		log.Errorf("Error getting result: %s", err)
 	}

@@ -1,12 +1,20 @@
-package ethtxmanager
+package types
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+)
+
+var (
+	// ErrNotFound when the object is not found
+	ErrNotFound = errors.New("not found")
+	// ErrAlreadyExists when the object already exists
+	ErrAlreadyExists = errors.New("already exists")
 )
 
 // EthermanInterface is the interface that wraps the basic Ethereum transaction operations.
@@ -39,11 +47,11 @@ type EthermanInterface interface {
 
 // StorageInterface is the interface that wraps the basic storage operations for monitored transactions.
 type StorageInterface interface {
-	Add(ctx context.Context, mTx monitoredTx) error
+	Add(ctx context.Context, mTx MonitoredTx) error
 	Remove(ctx context.Context, id common.Hash) error
-	Get(ctx context.Context, id common.Hash) (monitoredTx, error)
-	GetByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]monitoredTx, error)
-	GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]monitoredTx, error)
-	Update(ctx context.Context, mTx monitoredTx) error
+	Get(ctx context.Context, id common.Hash) (MonitoredTx, error)
+	GetByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]MonitoredTx, error)
+	GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]MonitoredTx, error)
+	Update(ctx context.Context, mTx MonitoredTx) error
 	Empty(ctx context.Context) error
 }
