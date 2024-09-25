@@ -213,6 +213,10 @@ func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		nonce = *forcedNonce
 	}
 
+	// Avoid nonces to be assigned while a new tx is being created
+	c.nonceMutex.Lock()
+	defer c.nonceMutex.Unlock()
+
 	// get gas price
 	gasPrice, err := c.suggestedGasPrice(ctx)
 	if err != nil {
@@ -648,15 +652,45 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 	// mined successfully, we need to review the nonce
 	if !confirmed && hasFailedReceipts && allHistoryTxsWereMined {
 		logger.Infof("nonce needs to be updated")
+		prevNonce := mTx.Nonce
 		err := c.reviewMonitoredTxNonce(ctx, &mTx, logger)
 		if err != nil {
 			logger.Errorf("failed to review monitored tx nonce: %v", err)
 			return
 		}
+		currentNonce := mTx.Nonce
+
 		err = c.storage.Update(ctx, mTx)
 		if err != nil {
 			logger.Errorf("failed to update monitored tx nonce change: %v", err)
 			return
+		}
+
+		// if nonce has been updated, we need to update the rest of pending txs nonces
+		// to avoid nonce conflicts
+		if prevNonce != currentNonce {
+			createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
+			if err != nil {
+				logger.Errorf("failed to get created monitored txs: %v", err)
+				return
+			}
+
+			for _, cTx := range createdTxs {
+				// Avoid memory aliasing
+				createdTx := cTx
+				if createdTx.Nonce > prevNonce && createdTx.Nonce < currentNonce {
+					err := c.reviewMonitoredTxNonce(ctx, &createdTx, logger)
+					if err != nil {
+						logger.Errorf("failed to review monitored tx nonce for created tx: %v", err)
+						return
+					}
+				}
+				err = c.storage.Update(ctx, createdTx)
+				if err != nil {
+					logger.Errorf("failed to update monitored tx nonce change: %v", err)
+					return
+				}
+			}
 		}
 	}
 
