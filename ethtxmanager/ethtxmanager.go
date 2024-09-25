@@ -49,6 +49,7 @@ type Client struct {
 	storage    storageInterface
 	from       common.Address
 	nonceMutex sync.Mutex
+	addTxMutex sync.Mutex
 }
 
 type pending struct {
@@ -154,25 +155,32 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 }
 
 // getTxNonce get the nonce for the given account
-func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, error) {
+func (c *Client) getTxNonce(ctx context.Context, from common.Address, checkCreatedTxs bool) (uint64, error) {
 	c.nonceMutex.Lock()
 	defer c.nonceMutex.Unlock()
-	// Get created transactions from the database for the given account
-	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent, MonitoredTxStatusFailed})
-	if err != nil {
-		return 0, fmt.Errorf("failed to get monitored txs in getTxNonce: %w", err)
-	}
 
-	var localNonce, pendingNonce uint64
-	if len(createdTxs) > 0 {
-		// if there are pending txs, we adjust the nonce accordingly
-		for _, createdTx := range createdTxs {
-			if createdTx.Nonce > localNonce {
-				localNonce = createdTx.Nonce
-			}
+	var (
+		localNonce, pendingNonce uint64
+		err                      error
+	)
+
+	if checkCreatedTxs {
+		// Get created transactions from the database for the given account
+		createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
+		if err != nil {
+			return 0, fmt.Errorf("failed to get monitored txs in getTxNonce: %w", err)
 		}
 
-		localNonce++
+		if len(createdTxs) > 0 {
+			// if there are pending txs, we adjust the nonce accordingly
+			for _, createdTx := range createdTxs {
+				if createdTx.Nonce > localNonce {
+					localNonce = createdTx.Nonce
+				}
+			}
+
+			localNonce++
+		}
 	}
 
 	// if there are no pending txs, we get the pending nonce from the etherman
@@ -180,11 +188,11 @@ func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, e
 		return 0, fmt.Errorf("failed to get pending nonce: %w", err)
 	}
 
-	if pendingNonce > localNonce {
-		return pendingNonce, nil
+	if localNonce > pendingNonce {
+		return localNonce, nil
 	}
 
-	return localNonce, nil
+	return pendingNonce, nil
 }
 
 // Add a transaction to be sent and monitored
@@ -201,9 +209,12 @@ func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	var nonce uint64
 	var err error
 
+	c.addTxMutex.Lock()
+	defer c.addTxMutex.Unlock()
+
 	if forcedNonce == nil {
 		// get next nonce
-		nonce, err = c.getTxNonce(ctx, c.from)
+		nonce, err = c.getTxNonce(ctx, c.from, true)
 		if err != nil {
 			err := fmt.Errorf("failed to get current nonce: %w", err)
 			log.Errorf(err.Error())
@@ -652,45 +663,11 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 	// mined successfully, we need to review the nonce
 	if !confirmed && hasFailedReceipts && allHistoryTxsWereMined {
 		logger.Infof("nonce needs to be updated")
-		prevNonce := mTx.Nonce
-		err := c.reviewMonitoredTxNonce(ctx, &mTx, logger)
+
+		err := c.reviewMonitoredTxNonce(ctx, mTx, logger)
 		if err != nil {
 			logger.Errorf("failed to review monitored tx nonce: %v", err)
 			return
-		}
-		currentNonce := mTx.Nonce
-
-		err = c.storage.Update(ctx, mTx)
-		if err != nil {
-			logger.Errorf("failed to update monitored tx nonce change: %v", err)
-			return
-		}
-
-		// if nonce has been updated, we need to update the rest of pending txs nonces
-		// to avoid nonce conflicts
-		if prevNonce != currentNonce {
-			createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
-			if err != nil {
-				logger.Errorf("failed to get created monitored txs: %v", err)
-				return
-			}
-
-			for _, cTx := range createdTxs {
-				// Avoid memory aliasing
-				createdTx := cTx
-				if createdTx.Nonce > prevNonce && createdTx.Nonce < currentNonce {
-					err := c.reviewMonitoredTxNonce(ctx, &createdTx, logger)
-					if err != nil {
-						logger.Errorf("failed to review monitored tx nonce for created tx: %v", err)
-						return
-					}
-				}
-				err = c.storage.Update(ctx, createdTx)
-				if err != nil {
-					logger.Errorf("failed to update monitored tx nonce change: %v", err)
-					return
-				}
-			}
 		}
 	}
 
@@ -944,18 +921,53 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 // IMPORTANT: Nonce is reviewed apart from the other fields because it is a very
 // sensible information and can make duplicated data to be sent to the blockchain,
 // causing possible side effects and wasting resources.
-func (c *Client) reviewMonitoredTxNonce(ctx context.Context, mTx *monitoredTx, mTxLogger *log.Logger) error {
+func (c *Client) reviewMonitoredTxNonce(ctx context.Context, mTx monitoredTx, mTxLogger *log.Logger) error {
+	// Avoid txs being added while we are reviewing the nonce
+	c.addTxMutex.Lock()
+	defer c.addTxMutex.Unlock()
+
+	prevNonce := mTx.Nonce
+
 	mTxLogger.Debug("reviewing nonce")
-	nonce, err := c.getTxNonce(ctx, mTx.From)
+	currentNonce, err := c.getTxNonce(ctx, mTx.From, false)
 	if err != nil {
 		err := fmt.Errorf("failed to load current nonce for acc %v: %w", mTx.From.String(), err)
 		mTxLogger.Errorf(err.Error())
 		return err
 	}
 
-	if nonce > mTx.Nonce {
-		mTxLogger.Infof("monitored tx nonce updated from %v to %v", mTx.Nonce, nonce)
-		mTx.Nonce = nonce
+	if currentNonce > mTx.Nonce {
+		mTxLogger.Infof("monitored tx nonce updated from %v to %v", mTx.Nonce, currentNonce)
+		mTx.Nonce = currentNonce
+
+		err = c.storage.Update(ctx, mTx)
+		if err != nil {
+			mTxLogger.Errorf("failed to update monitored tx nonce change: %v", err)
+			return err
+		}
+	}
+
+	// we need to update the rest of pending txs nonces
+	// to avoid nonce conflicts
+	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
+	if err != nil {
+		mTxLogger.Errorf("failed to get created monitored txs: %v", err)
+		return err
+	}
+
+	for _, cTx := range createdTxs {
+		// Avoid memory aliasing
+		createdTx := cTx
+		if createdTx.Nonce > prevNonce && createdTx.Nonce < currentNonce {
+			currentNonce++
+			createdTx.Nonce = currentNonce
+
+			err = c.storage.Update(ctx, createdTx)
+			if err != nil {
+				mTxLogger.Errorf("failed to update monitored tx nonce change: %v", err)
+				return err
+			}
+		}
 	}
 
 	return nil
