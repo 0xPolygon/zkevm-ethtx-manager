@@ -960,6 +960,7 @@ func (c *Client) reviewMonitoredTxNonce(ctx context.Context, mTx monitoredTx, mT
 		createdTx := cTx
 		if createdTx.Nonce > prevNonce && createdTx.Nonce < currentNonce {
 			currentNonce++
+			mTxLogger.Infof("monitored tx nonce updated from %v to %v", createdTx.Nonce, currentNonce)
 			createdTx.Nonce = currentNonce
 
 			err = c.storage.Update(ctx, createdTx)
