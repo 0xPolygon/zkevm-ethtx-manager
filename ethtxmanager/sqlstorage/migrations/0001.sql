@@ -6,17 +6,17 @@ CREATE TABLE IF NOT EXISTS tx_manager.monitored_txs (
     from_address CHAR(42) NOT NULL,
     to_address CHAR(42),
     nonce BIGINT NOT NULL,
-    "value" NUMERIC,
+    "value" TEXT,                  -- *big.Int
     tx_data BLOB,
     gas BIGINT NOT NULL,
     gas_offset BIGINT,
-    gas_price NUMERIC,
+    gas_price TEXT,                -- *big.Int
     blob_sidecar BLOB,
     blob_gas BIGINT,
-    blob_gas_price NUMERIC,
-    gas_tip_cap NUMERIC,
-    "status" INT NOT NULL,
-    block_number NUMERIC,
+    blob_gas_price TEXT,           -- *big.Int
+    gas_tip_cap TEXT,              -- *big.Int
+    "status" TEXT NOT NULL,
+    block_number TEXT NOT NULL,    -- *big.Int
     history TEXT,                  -- JSON encoded string
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,

@@ -2,9 +2,13 @@ package types
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
 	"math/big"
 	"time"
 
+	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
@@ -152,6 +156,51 @@ func (mTx *MonitoredTx) HistoryHashSlice() []common.Hash {
 		history = append(history, h)
 	}
 	return history
+}
+
+// PopulateNullableStrings converts the nullable strings and populates them to MonitoredTx instance
+func (mTx *MonitoredTx) PopulateNullableStrings(toAddress, blockNumber, value, gasPrice,
+	blobGasPrice, gasTipCap sql.NullString) {
+	if toAddress.Valid {
+		addr := common.HexToAddress(toAddress.String)
+		mTx.To = &addr
+	}
+
+	if blockNumber.Valid {
+		mTx.BlockNumber, _ = new(big.Int).SetString(blockNumber.String, localCommon.Base10)
+	}
+
+	if value.Valid {
+		mTx.Value, _ = new(big.Int).SetString(value.String, localCommon.Base10)
+	}
+
+	if gasPrice.Valid {
+		mTx.GasPrice, _ = new(big.Int).SetString(gasPrice.String, localCommon.Base10)
+	}
+
+	if blobGasPrice.Valid {
+		mTx.BlobGasPrice, _ = new(big.Int).SetString(blobGasPrice.String, localCommon.Base10)
+	}
+
+	if gasTipCap.Valid {
+		mTx.GasTipCap, _ = new(big.Int).SetString(gasTipCap.String, localCommon.Base10)
+	}
+}
+
+// EncodeBlobSidecarToJSON encodes BlobSidecar to JSON format
+func (mTx *MonitoredTx) EncodeBlobSidecarToJSON() ([]byte, error) {
+	var (
+		blobSidecar []byte
+		err         error
+	)
+
+	if mTx.BlobSidecar != nil {
+		blobSidecar, err = json.Marshal(mTx.BlobSidecar)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal blob sidecar: %w", err)
+		}
+	}
+	return blobSidecar, nil
 }
 
 // MonitoredTxResult represents the result of a execution of a monitored tx
