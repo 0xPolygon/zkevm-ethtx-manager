@@ -1,5 +1,7 @@
 package common
 
+import "github.com/ethereum/go-ethereum/common"
+
 const (
 	// Base10 decimal base
 	Base10 = 10
@@ -17,4 +19,19 @@ func BoolToInteger(v bool) int {
 	}
 
 	return 0
+}
+
+// ToAddressOrNil converts a string to a common.Address pointer or returns nil if empty.
+func ToAddressOrNil(addr string) *common.Address {
+	if addr == "" {
+		return nil
+	}
+
+	address := common.HexToAddress(addr)
+	return &address
+}
+
+// ToUint64Ptr is a helper to create uint64 pointer
+func ToUint64Ptr(v uint64) *uint64 {
+	return &v
 }

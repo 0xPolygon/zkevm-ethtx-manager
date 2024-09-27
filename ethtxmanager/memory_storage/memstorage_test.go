@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
@@ -211,25 +212,25 @@ func TestMemStorage_GetByBlock(t *testing.T) {
 	}{
 		{
 			name:        "Get all transactions within block range",
-			fromBlock:   uintPtr(100),
-			toBlock:     uintPtr(200),
+			fromBlock:   localCommon.ToUint64Ptr(100),
+			toBlock:     localCommon.ToUint64Ptr(200),
 			expectedTxs: []types.MonitoredTx{tx1, tx2, tx3},
 		},
 		{
 			name:        "Get transactions in middle range",
-			fromBlock:   uintPtr(120),
-			toBlock:     uintPtr(180),
+			fromBlock:   localCommon.ToUint64Ptr(120),
+			toBlock:     localCommon.ToUint64Ptr(180),
 			expectedTxs: []types.MonitoredTx{tx2},
 		},
 		{
 			name:        "Get transactions above a block range",
-			fromBlock:   uintPtr(170),
+			fromBlock:   localCommon.ToUint64Ptr(170),
 			toBlock:     nil, // No upper limit
 			expectedTxs: []types.MonitoredTx{tx3},
 		},
 		{
 			name:        "Get no transactions below block range",
-			fromBlock:   uintPtr(220),
+			fromBlock:   localCommon.ToUint64Ptr(220),
 			toBlock:     nil,
 			expectedTxs: []types.MonitoredTx{},
 		},
@@ -321,7 +322,7 @@ func newMonitoredTx(id string, from string, to string, nonce uint64, status type
 	return types.MonitoredTx{
 		ID:          common.HexToHash(id),
 		From:        common.HexToAddress(from),
-		To:          toAddressOrNil(to),
+		To:          localCommon.ToAddressOrNil(to),
 		Nonce:       nonce,
 		Value:       big.NewInt(1000),
 		Data:        []byte("data"),
@@ -334,20 +335,6 @@ func newMonitoredTx(id string, from string, to string, nonce uint64, status type
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-}
-
-// toAddressOrNil converts a string to a common.Address pointer or returns nil if empty.
-func toAddressOrNil(addr string) *common.Address {
-	if addr == "" {
-		return nil
-	}
-	address := common.HexToAddress(addr)
-	return &address
-}
-
-// uintPtr is a helper to create uint64 pointer
-func uintPtr(v uint64) *uint64 {
-	return &v
 }
 
 // populateTransactions is a helper function that populates the transactions map

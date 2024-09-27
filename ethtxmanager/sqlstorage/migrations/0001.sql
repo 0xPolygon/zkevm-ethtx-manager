@@ -1,7 +1,5 @@
 -- +migrate Up
-CREATE SCHEMA IF NOT EXISTS tx_manager;
-
-CREATE TABLE IF NOT EXISTS tx_manager.monitored_txs (
+CREATE TABLE IF NOT EXISTS monitored_txs (
     id CHAR(66) PRIMARY KEY,
     from_address CHAR(42) NOT NULL,
     to_address CHAR(42),
@@ -24,12 +22,10 @@ CREATE TABLE IF NOT EXISTS tx_manager.monitored_txs (
 );
 
 -- Indexes
-CREATE INDEX idx_monitored_txs_status ON tx_manager.monitored_txs("status");
-CREATE INDEX idx_monitored_txs_created_at ON tx_manager.monitored_txs(created_at);
-CREATE INDEX idx_monitored_txs_block_number ON tx_manager.monitored_txs(block_number);
-CREATE INDEX idx_monitored_txs_status_created_at ON tx_manager.monitored_txs("status", created_at);
+CREATE INDEX idx_monitored_txs_status ON monitored_txs("status");
+CREATE INDEX idx_monitored_txs_created_at ON monitored_txs(created_at);
+CREATE INDEX idx_monitored_txs_block_number ON monitored_txs(block_number);
+CREATE INDEX idx_monitored_txs_status_created_at ON monitored_txs("status", created_at);
 
 -- +migrate Down
 DROP TABLE IF EXISTS monitored_txs;
-
-DROP SCHEMA IF EXISTS tx_manager;

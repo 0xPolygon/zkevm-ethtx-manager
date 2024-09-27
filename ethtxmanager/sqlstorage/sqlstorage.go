@@ -9,8 +9,10 @@ import (
 	"time"
 
 	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/common"
+	_ "github.com/mattn/go-sqlite3"
 	migrate "github.com/rubenv/sql-migrate"
 )
 
@@ -45,10 +47,10 @@ const (
 	baseSelectQuery = `SELECT id, from_address, to_address, nonce, value, tx_data, gas, gas_offset, gas_price, 
 							blob_sidecar, blob_gas, blob_gas_price, gas_tip_cap, status, 
 							block_number, history, created_at, updated_at, estimate_gas
-						FROM tx_manager.monitored_txs`
+						FROM monitored_txs`
 
 	// baseDeleteStatement represents the base delete statement that deletes all the records from the monitored_txs table
-	baseDeleteStatement = "DELETE FROM tx_manager.monitored_txs"
+	baseDeleteStatement = "DELETE FROM monitored_txs"
 )
 
 var _ types.StorageInterface = (*SqlStorage)(nil)
@@ -80,7 +82,7 @@ func (s *SqlStorage) Add(ctx context.Context, mTx types.MonitoredTx) error {
 	mTx.UpdatedAt = mTx.CreatedAt
 
 	query := `
-		INSERT INTO tx_manager.monitored_txs (
+		INSERT INTO monitored_txs (
 			id, from_address, to_address, nonce, "value", tx_data, gas, gas_offset, gas_price, blob_sidecar, 
 			blob_gas, blob_gas_price, gas_tip_cap, "status", block_number, history, updated_at, estimate_gas, created_at
 		) VALUES (
@@ -190,16 +192,29 @@ func (s *SqlStorage) GetByStatus(ctx context.Context, statuses []types.Monitored
 // GetByBlock loads all monitored transactions that have the blockNumber between fromBlock and toBlock.
 func (s *SqlStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]types.MonitoredTx, error) {
 	query := baseSelectQuery
+	const maxArgs = 2
 
-	args := []interface{}{}
+	args := make([]interface{}, 0, maxArgs)
+	argsCounter := 1
 	if fromBlock != nil {
-		query += " AND block_number >= ?"
+		query += fmt.Sprintf(" WHERE block_number >= $%d", argsCounter)
 		args = append(args, *fromBlock)
+		argsCounter++
 	}
 	if toBlock != nil {
-		query += " AND block_number <= ?"
+		if argsCounter > 1 {
+			query += fmt.Sprintf(" AND block_number <= $%d", argsCounter)
+		} else {
+			query += fmt.Sprintf(" WHERE block_number <= $%d", argsCounter)
+		}
+
 		args = append(args, *toBlock)
 	}
+
+	log.Info(fmt.Sprintf("Query: %s", query))
+
+	// Add ordering by creation date (oldest first)
+	query += " ORDER BY created_at ASC"
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -215,7 +230,7 @@ func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 	mTx.UpdatedAt = time.Now()
 
 	query := `
-		UPDATE tx_manager.monitored_txs
+		UPDATE monitored_txs
 		SET from_address = $1,
 		    to_address = $2,
 		    nonce = $3,
@@ -242,9 +257,18 @@ func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 	}
 
 	// Execute the query with the arguments
-	_, err = s.db.ExecContext(ctx, query, args...)
+	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to update monitored transaction: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return types.ErrNotFound
 	}
 
 	return nil
@@ -252,7 +276,7 @@ func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 
 // Empty clears all the records from the monitored_txs table.
 func (s *SqlStorage) Empty(ctx context.Context) error {
-	query := "DELETE FROM tx_manager.monitored_txs"
+	query := "DELETE FROM monitored_txs"
 
 	_, err := s.db.ExecContext(ctx, query)
 	if err != nil {
@@ -298,7 +322,7 @@ func prepareArgs(mTx types.MonitoredTx, action sqlAction) ([]interface{}, error)
 
 	switch action {
 	case Insert:
-		args = append([]interface{}{mTx.ID}, args...)
+		args = append([]interface{}{mTx.ID.Hex()}, args...)
 		args = append(args, mTx.CreatedAt.Format(time.RFC3339))
 
 	case Update:
@@ -315,6 +339,8 @@ func prepareArgs(mTx types.MonitoredTx, action sqlAction) ([]interface{}, error)
 func scanMonitoredTxRow(rows *sql.Rows) (types.MonitoredTx, error) {
 	var (
 		mTx             types.MonitoredTx
+		txID            string
+		fromAddress     string
 		toAddress       sql.NullString // Nullable field for `to_address`.
 		blockNumber     sql.NullString // Nullable field for `block_number`.
 		value           sql.NullString // Nullable big.Int fields.
@@ -323,12 +349,14 @@ func scanMonitoredTxRow(rows *sql.Rows) (types.MonitoredTx, error) {
 		gasTipCap       sql.NullString // Nullable big.Int fields.
 		blobSidecarJSON []byte
 		historyJSON     []byte
+		createdAtString string
+		updatedAtString string
 		status          string
 	)
 
 	err := rows.Scan(
-		&mTx.ID,
-		&mTx.From,
+		&txID,
+		&fromAddress,
 		&toAddress,
 		&mTx.Nonce,
 		&value,
@@ -343,29 +371,48 @@ func scanMonitoredTxRow(rows *sql.Rows) (types.MonitoredTx, error) {
 		&status,
 		&blockNumber,
 		&historyJSON,
-		&mTx.CreatedAt,
-		&mTx.UpdatedAt,
+		&createdAtString,
+		&updatedAtString,
 		&mTx.EstimateGas,
 	)
 	if err != nil {
 		return types.MonitoredTx{}, err
 	}
 
+	mTx.ID = common.HexToHash(txID)
+	mTx.From = common.HexToAddress(fromAddress)
 	// Set the MonitoredTxStatus from the retrieved string
 	mTx.Status = types.MonitoredTxStatus(status)
 
 	// Populate nullable fields
 	mTx.PopulateNullableStrings(toAddress, blockNumber, value, gasPrice, blobGasPrice, gasTipCap)
 
-	// Unmarshal the BlobSidecar JSON
-	if err := json.Unmarshal(blobSidecarJSON, &mTx.BlobSidecar); err != nil {
+	if len(blobSidecarJSON) > 0 {
+		// Unmarshal the BlobSidecar JSON
+		if err := json.Unmarshal(blobSidecarJSON, &mTx.BlobSidecar); err != nil {
+			return types.MonitoredTx{}, err
+		}
+	}
+
+	if len(historyJSON) > 0 {
+		// Unmarshal the history JSON back into the map
+		if err := json.Unmarshal(historyJSON, &mTx.History); err != nil {
+			return types.MonitoredTx{}, err
+		}
+	}
+
+	createdAt, err := parseRFC3339Time(createdAtString)
+	if err != nil {
 		return types.MonitoredTx{}, err
 	}
 
-	// Unmarshal the history JSON back into the map
-	if err := json.Unmarshal(historyJSON, &mTx.History); err != nil {
+	updatedAt, err := parseRFC3339Time(updatedAtString)
+	if err != nil {
 		return types.MonitoredTx{}, err
 	}
+
+	mTx.CreatedAt = createdAt
+	mTx.UpdatedAt = updatedAt
 
 	return mTx, nil
 }
@@ -419,4 +466,14 @@ func prepareNullableString(value interface{}) sql.NullString {
 	}
 
 	return sql.NullString{Valid: false}
+}
+
+// parseRFC3339Time parses provided string (formatted as RFC3339) into time.Time
+func parseRFC3339Time(timeRaw string) (time.Time, error) {
+	parsedTime, err := time.Parse(time.RFC3339, timeRaw)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return parsedTime, nil
 }
