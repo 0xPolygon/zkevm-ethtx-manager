@@ -13,7 +13,9 @@ import (
 	"sync"
 	"time"
 
+	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/sqlstorage"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer/l1_check_block"
@@ -82,16 +84,31 @@ func New(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
+	storage, err := createStorage(cfg.PersistenceFilename)
+	if err != nil {
+		return nil, err
+	}
+
 	client := Client{
 		cfg:      cfg,
 		etherman: etherman,
-		storage:  NewMemStorage(cfg.PersistenceFilename),
+		storage:  storage,
 		from:     auth.From,
 	}
 
 	log.Init(cfg.Log)
 
 	return &client, nil
+}
+
+// createStorage instantiates either SQL storage or in memory storage.
+// In case dbPath parameter is a non-empty string, it creates SQL storage, otherwise in memory one.
+func createStorage(dbPath string) (types.StorageInterface, error) {
+	if dbPath != "" {
+		return sqlstorage.NewSqlStorage(localCommon.SQLLiteDriverName, dbPath)
+	}
+
+	return NewMemStorage(), nil
 }
 
 func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string) ([]types.MonitoredTx, error) {
