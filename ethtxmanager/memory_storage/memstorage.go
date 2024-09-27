@@ -1,4 +1,4 @@
-package ethtxmanager
+package memorystorage
 
 import (
 	"context"
@@ -16,8 +16,8 @@ type MemStorage struct {
 	Transactions map[common.Hash]types.MonitoredTx
 }
 
-// NewMemStorage creates a new instance of storage
-func NewMemStorage() *MemStorage {
+// NewStorage creates a new instance of storage
+func NewStorage() *MemStorage {
 	return &MemStorage{Transactions: make(map[common.Hash]types.MonitoredTx)}
 }
 
@@ -29,7 +29,7 @@ func (s *MemStorage) Add(ctx context.Context, mTx types.MonitoredTx) error {
 	defer s.TxsMutex.Unlock()
 
 	if _, exists := s.Transactions[mTx.ID]; exists {
-		return ErrAlreadyExists
+		return types.ErrAlreadyExists
 	}
 	s.Transactions[mTx.ID] = mTx
 	return nil
@@ -41,7 +41,7 @@ func (s *MemStorage) Remove(ctx context.Context, id common.Hash) error {
 	defer s.TxsMutex.Unlock()
 
 	if _, exists := s.Transactions[id]; !exists {
-		return ErrNotFound
+		return types.ErrNotFound
 	}
 	delete(s.Transactions, id)
 	return nil
@@ -55,7 +55,7 @@ func (s *MemStorage) Get(ctx context.Context, id common.Hash) (types.MonitoredTx
 	if mTx, exists := s.Transactions[id]; exists {
 		return mTx, nil
 	}
-	return types.MonitoredTx{}, ErrNotFound
+	return types.MonitoredTx{}, types.ErrNotFound
 }
 
 // GetByStatus loads all monitored transactions that match the provided statuses
@@ -80,16 +80,6 @@ func (s *MemStorage) GetByStatus(ctx context.Context, statuses []types.Monitored
 	return matchingTxs, nil
 }
 
-// containsStatus checks if a status is in the statuses slice
-func containsStatus(status types.MonitoredTxStatus, statuses []types.MonitoredTxStatus) bool {
-	for _, s := range statuses {
-		if s == status {
-			return true
-		}
-	}
-	return false
-}
-
 // GetByBlock loads all monitored tx that have the blockNumber between fromBlock and toBlock
 func (s *MemStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64) ([]types.MonitoredTx, error) {
 	mTxs := []types.MonitoredTx{}
@@ -106,6 +96,11 @@ func (s *MemStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64)
 
 		mTxs = append(mTxs, mTx)
 	}
+
+	sort.Slice(mTxs, func(i, j int) bool {
+		return mTxs[i].CreatedAt.Before(mTxs[j].CreatedAt)
+	})
+
 	return mTxs, nil
 }
 
@@ -116,7 +111,7 @@ func (s *MemStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 	defer s.TxsMutex.Unlock()
 
 	if _, exists := s.Transactions[mTx.ID]; !exists {
-		return ErrNotFound
+		return types.ErrNotFound
 	}
 	s.Transactions[mTx.ID] = mTx
 	return nil
@@ -129,4 +124,14 @@ func (s *MemStorage) Empty(ctx context.Context) error {
 
 	s.Transactions = make(map[common.Hash]types.MonitoredTx)
 	return nil
+}
+
+// containsStatus checks if a status is in the statuses slice
+func containsStatus(status types.MonitoredTxStatus, statuses []types.MonitoredTxStatus) bool {
+	for _, s := range statuses {
+		if s == status {
+			return true
+		}
+	}
+	return false
 }

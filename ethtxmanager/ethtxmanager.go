@@ -15,6 +15,7 @@ import (
 
 	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	memorystorage "github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/memory_storage"
 	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/sqlstorage"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
@@ -105,10 +106,10 @@ func New(cfg Config) (*Client, error) {
 // In case dbPath parameter is a non-empty string, it creates SQL storage, otherwise in memory one.
 func createStorage(dbPath string) (types.StorageInterface, error) {
 	if dbPath != "" {
-		return sqlstorage.NewSqlStorage(localCommon.SQLLiteDriverName, dbPath)
+		return sqlstorage.NewStorage(localCommon.SQLLiteDriverName, dbPath)
 	}
 
-	return NewMemStorage(), nil
+	return memorystorage.NewStorage(), nil
 }
 
 func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string) ([]types.MonitoredTx, error) {

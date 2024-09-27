@@ -58,10 +58,10 @@ type SqlStorage struct {
 	db *sql.DB
 }
 
-// NewSqlStorage creates and returns a new instance of SqlStorage with the given database path.
+// NewStorage creates and returns a new instance of SqlStorage with the given database path.
 // It first opens a connection to the SQLite database and then runs the necessary migrations.
 // If any error occurs during the database connection or migration process, it returns an error.
-func NewSqlStorage(driverName, dbPath string) (*SqlStorage, error) {
+func NewStorage(driverName, dbPath string) (*SqlStorage, error) {
 	db, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		return nil, err
