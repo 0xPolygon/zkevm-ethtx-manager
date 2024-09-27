@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -16,8 +15,12 @@ import (
 )
 
 const (
+	// Insert denotes insert statement
 	Insert sqlAction = iota
+	// Update denotes update statement
 	Update
+	// Delete denotes delete statement
+	Delete
 )
 
 type sqlAction int
@@ -29,15 +32,15 @@ func (s sqlAction) String() string {
 
 	case Update:
 		return "UPDATE"
+
+	case Delete:
+		return "DELETE"
 	}
 
 	return "UNKNOWN"
 }
 
 const (
-	// driverName is the name for the SQL lite driver
-	driverName = "sqlite3"
-
 	// baseSelectQuery represents the base select query, that retrieves all the values from the monitored_txs table
 	baseSelectQuery = `SELECT id, from_address, to_address, nonce, value, tx_data, gas, gas_offset, gas_price, 
 							blob_sidecar, blob_gas, blob_gas_price, gas_tip_cap, status, 
@@ -50,7 +53,7 @@ const (
 
 var _ types.StorageInterface = (*SqlStorage)(nil)
 
-//nolint:revive
+// SqlStorage encapsulates logic for MonitoredTx CRUD operations.
 type SqlStorage struct {
 	db *sql.DB
 }
@@ -58,7 +61,7 @@ type SqlStorage struct {
 // NewSqlStorage creates and returns a new instance of SqlStorage with the given database path.
 // It first opens a connection to the SQLite database and then runs the necessary migrations.
 // If any error occurs during the database connection or migration process, it returns an error.
-func NewSqlStorage(dbPath string) (*SqlStorage, error) {
+func NewSqlStorage(driverName, dbPath string) (*SqlStorage, error) {
 	db, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		return nil, err
@@ -138,67 +141,18 @@ func (s *SqlStorage) Remove(ctx context.Context, id common.Hash) error {
 func (s *SqlStorage) Get(ctx context.Context, id common.Hash) (types.MonitoredTx, error) {
 	query := fmt.Sprintf("%s WHERE id = $1", baseSelectQuery)
 
-	var (
-		mTx             types.MonitoredTx
-		toAddress       sql.NullString // Nullable field for `to_address`.
-		blockNumber     sql.NullString // Nullable field for `block_number`.
-		value           sql.NullString // Nullable big.Int fields.
-		gasPrice        sql.NullString // Nullable big.Int fields.
-		blobGasPrice    sql.NullString // Nullable big.Int fields.
-		gasTipCap       sql.NullString // Nullable big.Int fields.
-		blobSidecarJSON []byte
-		historyJSON     []byte
-		status          string
-	)
-
 	// Execute the query to retrieve the transaction data.
-	err := s.db.
-		QueryRowContext(ctx, query, id.Hex()).
-		Scan(
-			&mTx.ID,
-			&mTx.From,
-			&toAddress,
-			&mTx.Nonce,
-			&value,
-			&mTx.Data,
-			&mTx.Gas,
-			&mTx.GasOffset,
-			&gasPrice,
-			&blobSidecarJSON,
-			&mTx.BlobGas,
-			&blobGasPrice,
-			&gasTipCap,
-			&status,
-			&blockNumber,
-			&historyJSON,
-			&mTx.CreatedAt,
-			&mTx.UpdatedAt,
-			&mTx.EstimateGas,
-		)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return types.MonitoredTx{}, types.ErrNotFound
-
-	case err != nil:
+	rows, err := s.db.QueryContext(ctx, query, id.Hex())
+	if err != nil {
 		return types.MonitoredTx{}, err
 	}
+	defer rows.Close()
 
-	// Set the MonitoredTxStatus from the retrieved string
-	mTx.Status = types.MonitoredTxStatus(status)
-
-	mTx.PopulateNullableStrings(toAddress, blockNumber, value, gasPrice, blobGasPrice, gasTipCap)
-
-	// Unmarshal the BlobSidecar JSON.
-	if err := json.Unmarshal(blobSidecarJSON, &mTx.BlobSidecar); err != nil {
-		return types.MonitoredTx{}, err
+	if rows.Next() {
+		return scanMonitoredTxRow(rows)
 	}
 
-	// Unmarshal the history JSON back into the map.
-	if err := json.Unmarshal(historyJSON, &mTx.History); err != nil {
-		return types.MonitoredTx{}, err
-	}
-
-	return mTx, nil
+	return types.MonitoredTx{}, types.ErrNotFound
 }
 
 // GetByStatus retrieves monitored transactions from the database that match the provided statuses.
@@ -225,79 +179,12 @@ func (s *SqlStorage) GetByStatus(ctx context.Context, statuses []types.Monitored
 
 	// Execute the query and handle the result.
 	rows, err := s.db.QueryContext(ctx, query, statusArgs...)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return nil, types.ErrNotFound
-
-	case err != nil:
+	if err != nil {
 		return nil, err
 	}
-
 	defer rows.Close()
 
-	var mTxs []types.MonitoredTx
-
-	for rows.Next() {
-		var (
-			mTx             types.MonitoredTx
-			toAddress       sql.NullString // Nullable field for `to_address`.
-			blockNumber     sql.NullString // Nullable field for `block_number`.
-			value           sql.NullString // Nullable big.Int fields.
-			gasPrice        sql.NullString // Nullable big.Int fields.
-			blobGasPrice    sql.NullString // Nullable big.Int fields.
-			gasTipCap       sql.NullString // Nullable big.Int fields.
-			blobSidecarJSON []byte
-			historyJSON     []byte
-		)
-
-		err := rows.Scan(
-			&mTx.ID,
-			&mTx.From,
-			&toAddress,
-			&mTx.Nonce,
-			&value,
-			&mTx.Data,
-			&mTx.Gas,
-			&mTx.GasOffset,
-			&gasPrice,
-			&mTx.BlobSidecar,
-			&mTx.BlobGas,
-			&blobGasPrice,
-			&gasTipCap,
-			&mTx.Status,
-			&blockNumber,
-			&historyJSON,
-			&mTx.CreatedAt,
-			&mTx.UpdatedAt,
-			&mTx.EstimateGas,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		mTx.PopulateNullableStrings(toAddress, blockNumber, value, gasPrice, blobGasPrice, gasTipCap)
-
-		// Unmarshal the BlobSidecar JSON.
-		if err := json.Unmarshal(blobSidecarJSON, &mTx.BlobSidecar); err != nil {
-			return nil, err
-		}
-
-		// Unmarshal the history JSON back into the map.
-		if err := json.Unmarshal(historyJSON, &mTx.History); err != nil {
-			return nil, err
-		}
-
-		// Append the transaction to the result slice.
-		mTxs = append(mTxs, mTx)
-	}
-
-	// Check for any errors during iteration.
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	// Return the slice of monitored transactions.
-	return mTxs, nil
+	return scanMonitoredTxRows(rows)
 }
 
 // GetByBlock loads all monitored transactions that have the blockNumber between fromBlock and toBlock.
@@ -320,67 +207,7 @@ func (s *SqlStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64)
 	}
 	defer rows.Close()
 
-	var mTxs []types.MonitoredTx
-
-	for rows.Next() {
-		var (
-			mTx             types.MonitoredTx
-			toAddress       sql.NullString // Nullable field for `to_address`.
-			blockNumber     sql.NullString // Nullable field for `block_number`.
-			value           sql.NullString // Nullable big.Int fields.
-			gasPrice        sql.NullString // Nullable big.Int fields.
-			blobGasPrice    sql.NullString // Nullable big.Int fields.
-			gasTipCap       sql.NullString // Nullable big.Int fields.
-			blobSidecarJSON []byte
-			historyJSON     []byte
-		)
-
-		err := rows.Scan(
-			&mTx.ID,
-			&mTx.From,
-			&toAddress,
-			&mTx.Nonce,
-			&value,
-			&mTx.Data,
-			&mTx.Gas,
-			&mTx.GasOffset,
-			&gasPrice,
-			&mTx.BlobSidecar,
-			&mTx.BlobGas,
-			&blobGasPrice,
-			&gasTipCap,
-			&mTx.Status,
-			&blockNumber,
-			&historyJSON,
-			&mTx.CreatedAt,
-			&mTx.UpdatedAt,
-			&mTx.EstimateGas,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		mTx.PopulateNullableStrings(toAddress, blockNumber, value, gasPrice, blobGasPrice, gasTipCap)
-
-		// Unmarshal the BlobSidecar JSON.
-		if err := json.Unmarshal(blobSidecarJSON, &mTx.BlobSidecar); err != nil {
-			return nil, err
-		}
-
-		// Unmarshal the history JSON back into the map.
-		if err := json.Unmarshal(historyJSON, &mTx.History); err != nil {
-			return nil, err
-		}
-
-		mTxs = append(mTxs, mTx)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	// Return the slice of monitored transactions.
-	return mTxs, nil
+	return scanMonitoredTxRows(rows)
 }
 
 // Update a persisted monitored tx
@@ -484,6 +311,84 @@ func prepareArgs(mTx types.MonitoredTx, action sqlAction) ([]interface{}, error)
 	return args, nil
 }
 
+// scanMonitoredTxRow is a helper function to scan a row into a MonitoredTx object
+func scanMonitoredTxRow(rows *sql.Rows) (types.MonitoredTx, error) {
+	var (
+		mTx             types.MonitoredTx
+		toAddress       sql.NullString // Nullable field for `to_address`.
+		blockNumber     sql.NullString // Nullable field for `block_number`.
+		value           sql.NullString // Nullable big.Int fields.
+		gasPrice        sql.NullString // Nullable big.Int fields.
+		blobGasPrice    sql.NullString // Nullable big.Int fields.
+		gasTipCap       sql.NullString // Nullable big.Int fields.
+		blobSidecarJSON []byte
+		historyJSON     []byte
+		status          string
+	)
+
+	err := rows.Scan(
+		&mTx.ID,
+		&mTx.From,
+		&toAddress,
+		&mTx.Nonce,
+		&value,
+		&mTx.Data,
+		&mTx.Gas,
+		&mTx.GasOffset,
+		&gasPrice,
+		&blobSidecarJSON,
+		&mTx.BlobGas,
+		&blobGasPrice,
+		&gasTipCap,
+		&status,
+		&blockNumber,
+		&historyJSON,
+		&mTx.CreatedAt,
+		&mTx.UpdatedAt,
+		&mTx.EstimateGas,
+	)
+	if err != nil {
+		return types.MonitoredTx{}, err
+	}
+
+	// Set the MonitoredTxStatus from the retrieved string
+	mTx.Status = types.MonitoredTxStatus(status)
+
+	// Populate nullable fields
+	mTx.PopulateNullableStrings(toAddress, blockNumber, value, gasPrice, blobGasPrice, gasTipCap)
+
+	// Unmarshal the BlobSidecar JSON
+	if err := json.Unmarshal(blobSidecarJSON, &mTx.BlobSidecar); err != nil {
+		return types.MonitoredTx{}, err
+	}
+
+	// Unmarshal the history JSON back into the map
+	if err := json.Unmarshal(historyJSON, &mTx.History); err != nil {
+		return types.MonitoredTx{}, err
+	}
+
+	return mTx, nil
+}
+
+// scanMonitoredTxRows is a helper function to scan multiple rows
+func scanMonitoredTxRows(rows *sql.Rows) ([]types.MonitoredTx, error) {
+	var mTxs []types.MonitoredTx
+	for rows.Next() {
+		mTx, err := scanMonitoredTxRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		mTxs = append(mTxs, mTx)
+	}
+
+	// Check for any errors during iteration
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return mTxs, nil
+}
+
 // encodeHistoryAndBlobSidecar marshals the history and blob sidecar into a JSON.
 func encodeHistoryAndBlobSidecar(mTx types.MonitoredTx) ([]byte, []byte, error) {
 	historyJSON, err := json.Marshal(mTx.History)
@@ -506,10 +411,12 @@ func prepareNullableString(value interface{}) sql.NullString {
 		if v != nil {
 			return sql.NullString{Valid: true, String: v.Hex()}
 		}
+
 	case *big.Int:
 		if v != nil {
 			return sql.NullString{Valid: true, String: v.String()}
 		}
 	}
+
 	return sql.NullString{Valid: false}
 }
