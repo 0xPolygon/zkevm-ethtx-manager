@@ -11,7 +11,7 @@ import (
 //go:embed migrations/*
 var dbMigrations embed.FS
 
-//nolint:revive
+// RunMigrations applies database migrations in the specified direction (up or down).
 func RunMigrations(driverName string, db *sql.DB, direction migrate.MigrationDirection) error {
 	migrations := migrate.EmbedFileSystemMigrationSource{
 		FileSystem: dbMigrations,
