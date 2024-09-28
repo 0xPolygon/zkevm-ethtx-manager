@@ -124,7 +124,7 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 		return nil, err
 	}
 
-	var mTxs []types.MonitoredTx
+	mTxs := make([]types.MonitoredTx, 0, len(L1Txs.Pending[from]))
 	for _, tx := range L1Txs.Pending[from] {
 		if common.HexToAddress(tx.From) == from {
 			to := common.HexToAddress(tx.To)
@@ -756,10 +756,10 @@ func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt *typ
 // state of the blockchain
 func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIteration, mTxLogger *log.Logger) error {
 	mTxLogger.Debug("reviewing")
+	isBlobTx := mTx.BlobSidecar != nil
 	var (
-		isBlobTx = mTx.BlobSidecar != nil
-		err      error
-		gas      uint64
+		err error
+		gas uint64
 	)
 
 	// get gas price
