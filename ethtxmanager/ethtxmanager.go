@@ -183,8 +183,15 @@ func (c *Client) AddWithGas(ctx context.Context, to *common.Address,
 	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
 }
 
-func (c *Client) add(ctx context.Context, to *common.Address,
-	value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+func (c *Client) add(
+	ctx context.Context,
+	to *common.Address,
+	value *big.Int,
+	data []byte,
+	gasOffset uint64,
+	sidecar *ethTypes.BlobTxSidecar,
+	gas uint64,
+) (common.Hash, error) {
 	var err error
 
 	// get gas price
@@ -195,9 +202,12 @@ func (c *Client) add(ctx context.Context, to *common.Address,
 		return common.Hash{}, err
 	}
 
-	var blobFeeCap *big.Int
-	var gasTipCap *big.Int
-	var estimateGas bool
+	var (
+		blobFeeCap  *big.Int
+		gasTipCap   *big.Int
+		estimateGas bool
+	)
+
 	if gas == 0 {
 		estimateGas = true
 	}
