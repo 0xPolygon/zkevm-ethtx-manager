@@ -3,7 +3,7 @@ module github.com/0xPolygon/zkevm-ethtx-manager
 go 1.21.3
 
 require (
-	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.7.0
+	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v1.0.1
 	github.com/ethereum/go-ethereum v1.14.8
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.3.1
@@ -45,10 +45,10 @@ require (
 	github.com/tklauser/numcpus v0.8.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
+	golang.org/x/crypto v0.27.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.24.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
