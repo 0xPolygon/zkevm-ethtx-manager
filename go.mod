@@ -1,7 +1,6 @@
 module github.com/0xPolygon/zkevm-ethtx-manager
 
-go 1.21.3
-toolchain go1.22.5
+go 1.22
 
 require (
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.7.0
