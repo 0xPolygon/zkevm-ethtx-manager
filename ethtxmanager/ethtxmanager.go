@@ -153,24 +153,17 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 }
 
 // Add a transaction to be sent and monitored
-func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
-	return c.add(ctx, to, forcedNonce, value, data, gasOffset, sidecar, 0)
+func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
+	return c.add(ctx, to, value, data, gasOffset, sidecar, 0)
 }
 
 // AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
-func (c *Client) AddWithGas(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
-	return c.add(ctx, to, forcedNonce, value, data, gasOffset, sidecar, gas)
+func (c *Client) AddWithGas(ctx context.Context, to *common.Address, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
 }
 
-func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
-	var nonce uint64
+func (c *Client) add(ctx context.Context, to *common.Address, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
 	var err error
-
-	if forcedNonce != nil {
-		// we should review this forced nonce feature, because now it doesn't make sense to have it
-		// since we are always updating the nonce before sending the tx
-		nonce = *forcedNonce
-	}
 
 	// get gas price
 	gasPrice, err := c.suggestedGasPrice(ctx)
@@ -252,14 +245,12 @@ func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	if sidecar == nil {
 		tx = types.NewTx(&types.LegacyTx{
 			To:    to,
-			Nonce: nonce,
 			Value: value,
 			Data:  data,
 		})
 	} else {
 		tx = types.NewTx(&types.BlobTx{
 			To:         *to,
-			Nonce:      nonce,
 			Value:      uint256.MustFromBig(value),
 			Data:       data,
 			BlobHashes: sidecar.BlobHashes(),
@@ -272,7 +263,7 @@ func (c *Client) add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	// create monitored tx
 	mTx := monitoredTx{
 		ID: id, From: c.from, To: to,
-		Nonce: nonce, Value: value, Data: data,
+		Value: value, Data: data,
 		Gas: gas, GasPrice: gasPrice, GasOffset: gasOffset,
 		BlobSidecar:  sidecar,
 		BlobGas:      tx.BlobGas(),
