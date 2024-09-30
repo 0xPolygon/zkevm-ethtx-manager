@@ -15,8 +15,7 @@ import (
 )
 
 var (
-	to0  = common.HexToAddress("0x0000000000000000000000000000000000000000")
-	from = common.HexToAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+	to0 = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
 func main() {
@@ -51,17 +50,6 @@ func main() {
 
 	ctx := context.Background()
 
-	// Get starting nonce
-	testEtherman, err := etherman.NewClient(config.Etherman)
-	if err != nil {
-		log.Fatalf("Error creating etherman client: %s", err)
-	}
-
-	nonce, err := testEtherman.CurrentNonce(ctx, from)
-	if err != nil {
-		log.Fatalf("Error getting nonce: %s", err)
-	}
-
 	go client.Start()
 	log.Debug("ethtxmanager started")
 	// sendBlobTransaction(ctx, client, nonce)
@@ -69,8 +57,7 @@ func main() {
 
 	for i := 0; i < 1; i++ {
 		time.Sleep(100 * time.Millisecond)
-		sendTransaction(ctx, client, nonce)
-		nonce++
+		sendTransaction(ctx, client)
 	}
 
 	for {
@@ -110,8 +97,8 @@ func main() {
 	}
 }
 
-func sendTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client, nonce uint64) common.Hash {
-	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(1), []byte{byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}, 0, nil)
+func sendTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client) common.Hash {
+	id, err := ethtxmanager.Add(ctx, &to0, big.NewInt(1), []byte{byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}, 0, nil)
 	if err != nil {
 		log.Errorf("Error sending transaction: %s", err)
 	} else {
@@ -120,7 +107,7 @@ func sendTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client, non
 	return id
 }
 
-func sendBlobTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client, nonce uint64) common.Hash {
+func sendBlobTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client) common.Hash {
 	blobBytes := []byte{255, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}
 	blob, err := ethtxmanager.EncodeBlobData(blobBytes)
 	if err != nil {
@@ -131,7 +118,7 @@ func sendBlobTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client,
 
 	// data := []byte{228, 103, 97, 196} // pol method
 	data := []byte{}
-	id, err := ethtxmanager.Add(ctx, &to0, &nonce, big.NewInt(0), data, 0, blobSidecar)
+	id, err := ethtxmanager.Add(ctx, &to0, big.NewInt(0), data, 0, blobSidecar)
 	if err != nil {
 		log.Errorf("Error sending Blob transaction: %s", err)
 	} else {
