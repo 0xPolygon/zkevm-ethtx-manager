@@ -1,12 +1,16 @@
 package ethtxmanager
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
+	"github.com/0xPolygonHermez/zkevm-ethtx-manager/mocks"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestTx(t *testing.T) {
@@ -75,4 +79,94 @@ func TestBlobTx(t *testing.T) {
 	assert.Equal(t, blobSidecar, tx.BlobTxSidecar())
 	assert.Equal(t, blobGas, tx.BlobGas())
 	assert.Equal(t, blobGasPrice, tx.BlobGasFeeCap())
+}
+
+func TestShouldUpdateNonce(t *testing.T) {
+	ctx := context.Background()
+	etherman := mocks.NewEthermanInterface(t)
+
+	tests := []struct {
+		name           string
+		status         MonitoredTxStatus
+		history        map[common.Hash]bool
+		mockResponses  []*mock.Call
+		expectedResult bool
+	}{
+		{
+			name:   "StatusCreated",
+			status: MonitoredTxStatusCreated,
+			history: map[common.Hash]bool{
+				common.HexToHash("0x1"): true,
+			},
+			expectedResult: true,
+		},
+		{
+			name:   "ConfirmedTx",
+			status: MonitoredTxStatusSent,
+			history: map[common.Hash]bool{
+				common.HexToHash("0x1"): true,
+			},
+			mockResponses: []*mock.Call{
+				etherman.On("CheckTxWasMined", ctx, common.HexToHash("0x1")).Return(true, &types.Receipt{Status: types.ReceiptStatusSuccessful}, nil),
+			},
+			expectedResult: false,
+		},
+		{
+			name:   "FailedTx",
+			status: MonitoredTxStatusSent,
+			history: map[common.Hash]bool{
+				common.HexToHash("0x1"): true,
+			},
+			mockResponses: []*mock.Call{
+				etherman.On("CheckTxWasMined", ctx, common.HexToHash("0x1")).Return(true, &types.Receipt{Status: types.ReceiptStatusFailed}, nil),
+			},
+			expectedResult: true,
+		},
+		{
+			name:   "PendingTx",
+			status: MonitoredTxStatusSent,
+			history: map[common.Hash]bool{
+				common.HexToHash("0x1"): true,
+			},
+			mockResponses: []*mock.Call{
+				etherman.On("CheckTxWasMined", ctx, common.HexToHash("0x1")).Return(false, nil, nil),
+			},
+			expectedResult: false,
+		},
+		{
+			name:   "MixedTx",
+			status: MonitoredTxStatusSent,
+			history: map[common.Hash]bool{
+				common.HexToHash("0x1"): true,
+				common.HexToHash("0x2"): true,
+			},
+			mockResponses: []*mock.Call{
+				etherman.On("CheckTxWasMined", ctx, common.HexToHash("0x2")).Return(false, nil, nil),
+				etherman.On("CheckTxWasMined", ctx, common.HexToHash("0x1")).Return(true, &types.Receipt{Status: types.ReceiptStatusFailed}, nil),
+			},
+			expectedResult: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			etherman.ExpectedCalls = tt.mockResponses
+
+			for _, mockResponse := range tt.mockResponses {
+				mockResponse.Once()
+			}
+
+			m := &monitoredTxnIteration{
+				monitoredTx: &monitoredTx{
+					Status:  tt.status,
+					History: tt.history,
+				},
+			}
+
+			result := m.shouldUpdateNonce(ctx, etherman)
+			assert.Equal(t, tt.expectedResult, result)
+
+			etherman.AssertExpectations(t)
+		})
+	}
 }

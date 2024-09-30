@@ -45,8 +45,8 @@ type Client struct {
 	cancel context.CancelFunc
 
 	cfg      Config
-	etherman ethermanInterface
-	storage  storageInterface
+	etherman EthermanInterface
+	storage  StorageInterface
 	from     common.Address
 }
 

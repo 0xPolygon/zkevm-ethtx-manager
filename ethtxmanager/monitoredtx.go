@@ -179,7 +179,7 @@ type monitoredTxnIteration struct {
 	lastReceipt *types.Receipt
 }
 
-func (m *monitoredTxnIteration) shouldUpdateNonce(ctx context.Context, etherman ethermanInterface) bool {
+func (m *monitoredTxnIteration) shouldUpdateNonce(ctx context.Context, etherman EthermanInterface) bool {
 	if m.Status == MonitoredTxStatusCreated {
 		// transaction was not sent, so no need to check if it was mined
 		// we need to update the nonce in this case
