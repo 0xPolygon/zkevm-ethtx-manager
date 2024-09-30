@@ -21,8 +21,8 @@ func BoolToInteger(v bool) int {
 	return 0
 }
 
-// ToAddressOrNil converts a string to a common.Address pointer or returns nil if empty.
-func ToAddressOrNil(addr string) *common.Address {
+// ToAddressPtr converts a string to a common.Address pointer or returns nil if empty.
+func ToAddressPtr(addr string) *common.Address {
 	if addr == "" {
 		return nil
 	}

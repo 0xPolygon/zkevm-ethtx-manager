@@ -322,7 +322,7 @@ func newMonitoredTx(id string, from string, to string, nonce uint64, status type
 	return types.MonitoredTx{
 		ID:          common.HexToHash(id),
 		From:        common.HexToAddress(from),
-		To:          localCommon.ToAddressOrNil(to),
+		To:          localCommon.ToAddressPtr(to),
 		Nonce:       nonce,
 		Value:       big.NewInt(1000),
 		Data:        []byte("data"),

@@ -278,7 +278,7 @@ func TestSqlStorage_Update(t *testing.T) {
 			updateTx: types.MonitoredTx{
 				ID:          tx.ID,
 				From:        common.HexToAddress("0xUpdatedSender"),
-				To:          localCommon.ToAddressOrNil("0x123456789"),
+				To:          localCommon.ToAddressPtr("0x123456789"),
 				Nonce:       1,
 				Value:       big.NewInt(200),
 				Data:        []byte{0x4, 0x5, 0x6},
@@ -294,7 +294,7 @@ func TestSqlStorage_Update(t *testing.T) {
 			updateTx: types.MonitoredTx{
 				ID:          common.HexToHash("0x2"),
 				From:        common.HexToAddress("0xUpdatedSender2"),
-				To:          localCommon.ToAddressOrNil("0xabcdef987654"),
+				To:          localCommon.ToAddressPtr("0xabcdef987654"),
 				Nonce:       1,
 				Value:       big.NewInt(200),
 				Data:        []byte{0x4, 0x5, 0x6},
@@ -405,7 +405,7 @@ func newMonitoredTx(idHex string, fromHex string, toHex string, nonce uint64, st
 	return types.MonitoredTx{
 		ID:          common.HexToHash(idHex),
 		From:        common.HexToAddress(fromHex),
-		To:          localCommon.ToAddressOrNil(toHex),
+		To:          localCommon.ToAddressPtr(toHex),
 		Nonce:       nonce,
 		Value:       big.NewInt(10),
 		Data:        nil,
