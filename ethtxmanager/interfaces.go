@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// EthermanInterface is the interface that wraps the basic Ethereum transaction operations.
 type EthermanInterface interface {
 	GetTx(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error)
 	GetTxReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
@@ -28,6 +29,7 @@ type EthermanInterface interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 }
 
+// StorageInterface is the interface that wraps the basic storage operations for monitored transactions.
 type StorageInterface interface {
 	Add(ctx context.Context, mTx monitoredTx) error
 	Remove(ctx context.Context, id common.Hash) error
