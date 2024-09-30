@@ -30,7 +30,7 @@ func main() {
 		MaxGasPriceLimit:                0,
 		SafeStatusL1NumberOfBlocks:      0,
 		FinalizedStatusL1NumberOfBlocks: 0,
-		PersistenceFilename:             "ethtxmanager-persistence.json",
+		DBPath:                          "ethtxmanager-persistence.db",
 		ReadPendingL1Txs:                false,
 		Log:                             log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
 		PrivateKeys:                     []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
