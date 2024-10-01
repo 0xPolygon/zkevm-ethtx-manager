@@ -259,7 +259,6 @@ func TestSqlStorage_GetByBlock(t *testing.T) {
 }
 
 func TestSqlStorage_Update(t *testing.T) {
-	t.Skip("FIXME")
 	ctx := context.Background()
 
 	// Setup a temporary SQLite database for testing
