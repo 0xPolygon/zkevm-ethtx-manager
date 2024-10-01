@@ -9,6 +9,7 @@ require (
 	github.com/holiman/uint256 v1.3.1
 	github.com/mattn/go-sqlite3 v1.14.23
 	github.com/rubenv/sql-migrate v1.7.0
+	github.com/russross/meddler v1.0.1
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 )

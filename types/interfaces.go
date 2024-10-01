@@ -102,7 +102,6 @@ type EthermanInterface interface {
 // StorageInterface defines the methods required to interact with
 // the storage layer for managing MonitoredTx entities.
 type StorageInterface interface {
-
 	// Add inserts a new MonitoredTx into the storage.
 	// It takes a context and the MonitoredTx to be added.
 	// Returns an error if the transaction cannot be stored.

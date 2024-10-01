@@ -3,8 +3,6 @@ package types
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -48,66 +46,63 @@ func (s MonitoredTxStatus) String() string {
 // MonitoredTx represents a set of information used to build tx
 // plus information to monitor if the transactions was sent successfully
 type MonitoredTx struct {
-	// ID is the tx identifier controller by the caller
-	ID common.Hash `mapstructure:"id"`
+	// ID is the tx identifier controlled by the caller
+	ID common.Hash `mapstructure:"id" meddler:"id,hash"`
 
-	// sender of the tx, used to identify which private key should be used to sing the tx
-	From common.Address `mapstructure:"from"`
+	// From is the sender of the tx, used to identify which private key should be used to sign the tx
+	From common.Address `mapstructure:"from" meddler:"from_address,address"`
 
-	// receiver of the tx
-	To *common.Address `mapstructure:"to"`
+	// To is the receiver of the tx
+	To *common.Address `mapstructure:"to" meddler:"to_address,address"`
 
-	// Nonce used to create the tx
-	Nonce uint64 `mapstructure:"nonce"`
+	// Nonce is used to create the tx
+	Nonce uint64 `mapstructure:"nonce" meddler:"nonce"`
 
-	// tx Value
-	Value *big.Int `mapstructure:"value"`
+	// Value is the transaction value
+	Value *big.Int `mapstructure:"value" meddler:"value,bigInt"`
 
-	// tx Data
-	Data []byte `mapstructure:"data"`
+	// Data represents the transaction data
+	Data []byte `mapstructure:"data" meddler:"tx_data"`
 
-	// tx Gas
-	Gas uint64 `mapstructure:"gas"`
+	// Gas is the amount of gas for the transaction
+	Gas uint64 `mapstructure:"gas" meddler:"gas"`
 
-	// tx gas offset
-	GasOffset uint64 `mapstructure:"gasOffset"`
+	// GasOffset is the offset applied to the gas amount
+	GasOffset uint64 `mapstructure:"gasOffset" meddler:"gas_offset"`
 
-	// tx gas price
-	GasPrice *big.Int `mapstructure:"gasPrice"`
+	// GasPrice is the price per gas unit for the transaction
+	GasPrice *big.Int `mapstructure:"gasPrice" meddler:"gas_price,bigInt"`
 
-	// blob Sidecar
-	BlobSidecar *types.BlobTxSidecar `mapstructure:"blobSidecar"`
+	// BlobSidecar holds sidecar data for blob transactions
+	BlobSidecar *types.BlobTxSidecar `mapstructure:"blobSidecar" meddler:"blob_sidecar,json"`
 
-	// blob Gas
-	BlobGas uint64 `mapstructure:"blobGas"`
+	// BlobGas is the gas amount for the blob transaction
+	BlobGas uint64 `mapstructure:"blobGas" meddler:"blob_gas"`
 
-	// blob gas price
-	BlobGasPrice *big.Int `mapstructure:"blobGasPrice"`
+	// BlobGasPrice is the gas price for blob transactions
+	BlobGasPrice *big.Int `mapstructure:"blobGasPrice" meddler:"blob_gas_price,bigInt"`
 
-	// gas tip cap
-	GasTipCap *big.Int `mapstructure:"gasTipCap"`
+	// GasTipCap is the tip cap for the gas fee
+	GasTipCap *big.Int `mapstructure:"gasTipCap" meddler:"gas_tip_cap,bigInt"`
 
-	// Status of this monitoring
-	Status MonitoredTxStatus `mapstructure:"status"`
+	// Status represents the status of this monitored transaction
+	Status MonitoredTxStatus `mapstructure:"status" meddler:"status"`
 
-	// BlockNumber represents the block where the tx was identified
-	// to be mined, it's the same as the block number found in the
-	// tx receipt, this is used to control reorged monitored txs
-	BlockNumber *big.Int `mapstructure:"blockNumber"`
+	// BlockNumber represents the block where the transaction was identified to be mined
+	// This is used to control reorged monitored txs.
+	BlockNumber *big.Int `mapstructure:"blockNumber" meddler:"block_number,bigInt"`
 
-	// History represent all transaction hashes from
-	// transactions created using this struct data and
-	// sent to the network
-	History map[common.Hash]bool `mapstructure:"history"`
+	// History represents all transaction hashes created using this struct and sent to the network
+	History map[common.Hash]bool `mapstructure:"history" meddler:"history,json"`
 
-	// CreatedAt date time it was created
-	CreatedAt time.Time `mapstructure:"createdAt"`
+	// CreatedAt is the timestamp for when the transaction was created
+	CreatedAt time.Time `mapstructure:"createdAt" meddler:"created_at,timeRFC3339"`
 
-	// UpdatedAt last date time it was updated
-	UpdatedAt time.Time `mapstructure:"updatedAt"`
+	// UpdatedAt is the timestamp for when the transaction was last updated
+	UpdatedAt time.Time `mapstructure:"updatedAt" meddler:"updated_at,timeRFC3339"`
 
-	// EstimateGas indicates if gas should be estimated or last value shold be reused
-	EstimateGas bool `mapstructure:"estimateGas"`
+	// EstimateGas indicates whether gas should be estimated or the last value should be reused
+	EstimateGas bool `mapstructure:"estimateGas" meddler:"estimate_gas"`
 }
 
 // Tx uses the current information to build a tx
@@ -185,22 +180,6 @@ func (mTx *MonitoredTx) PopulateNullableStrings(toAddress, blockNumber, value, g
 	if gasTipCap.Valid {
 		mTx.GasTipCap, _ = new(big.Int).SetString(gasTipCap.String, localCommon.Base10)
 	}
-}
-
-// EncodeBlobSidecarToJSON encodes BlobSidecar to JSON format
-func (mTx *MonitoredTx) EncodeBlobSidecarToJSON() ([]byte, error) {
-	var (
-		blobSidecar []byte
-		err         error
-	)
-
-	if mTx.BlobSidecar != nil {
-		blobSidecar, err = json.Marshal(mTx.BlobSidecar)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal blob sidecar: %w", err)
-		}
-	}
-	return blobSidecar, nil
 }
 
 // MonitoredTxResult represents the result of a execution of a monitored tx

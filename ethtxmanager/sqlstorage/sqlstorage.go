@@ -3,17 +3,16 @@ package sqlstorage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"math/big"
 	"time"
 
 	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
-	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/common"
-	_ "github.com/mattn/go-sqlite3"
+	sqlite "github.com/mattn/go-sqlite3"
 	migrate "github.com/rubenv/sql-migrate"
+	"github.com/russross/meddler"
 )
 
 const (
@@ -51,6 +50,13 @@ const (
 
 	// baseDeleteStatement represents the base delete statement that deletes all the records from the monitored_txs table
 	baseDeleteStatement = "DELETE FROM monitored_txs"
+
+	// monitoredTxsTable is table name for persisting MonitoredTx objects
+	monitoredTxsTable = "monitored_txs"
+)
+
+var (
+	errNoRowsInResultSet = errors.New("sql: no rows in result set")
 )
 
 var _ types.StorageInterface = (*SqlStorage)(nil)
@@ -69,9 +75,20 @@ func NewStorage(driverName, dbPath string) (*SqlStorage, error) {
 		return nil, err
 	}
 
+	_, err = db.Exec(`
+		pragma journal_mode = WAL;
+		pragma synchronous = normal;
+		pragma journal_size_limit  = 6144000;
+	`)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := RunMigrations(driverName, db, migrate.Up); err != nil {
 		return nil, err
 	}
+
+	initMeddler()
 
 	return &SqlStorage{db: db}, nil
 }
@@ -81,38 +98,19 @@ func (s *SqlStorage) Add(ctx context.Context, mTx types.MonitoredTx) error {
 	mTx.CreatedAt = time.Now()
 	mTx.UpdatedAt = mTx.CreatedAt
 
-	query := `
-		INSERT INTO monitored_txs (
-			id, from_address, to_address, nonce, "value", tx_data, gas, gas_offset, gas_price, blob_sidecar, 
-			blob_gas, blob_gas_price, gas_tip_cap, "status", block_number, history, updated_at, estimate_gas, created_at
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-			$11, $12, $13, $14, $15, $16, $17, $18, $19
-		)
-		ON CONFLICT (id) DO NOTHING;`
-
-	args, err := prepareArgs(mTx, Insert)
+	err := meddler.Insert(s.db, monitoredTxsTable, &mTx)
 	if err != nil {
-		return err
+		sqlErr, success := UnwrapSQLiteErr(err)
+		if !success {
+			return err
+		}
+
+		if sqlErr.Code == sqlite.ErrConstraint {
+			return fmt.Errorf("transaction with ID %s already exists", mTx.ID)
+		}
 	}
 
-	// Execute the insert query with the provided transaction values.
-	result, err := s.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("failed to insert monitored transaction: %w", err)
-	}
-
-	// Check if any rows were affected (transaction inserted).
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("transaction with ID %s already exists", mTx.ID)
-	}
-
-	return nil
+	return err
 }
 
 // Remove deletes a monitored transaction from the database by its ID.
@@ -144,17 +142,17 @@ func (s *SqlStorage) Get(ctx context.Context, id common.Hash) (types.MonitoredTx
 	query := fmt.Sprintf("%s WHERE id = $1", baseSelectQuery)
 
 	// Execute the query to retrieve the transaction data.
-	rows, err := s.db.QueryContext(ctx, query, id.Hex())
+	var mTx types.MonitoredTx
+	err := meddler.QueryRow(s.db, &mTx, query, id.Hex())
 	if err != nil {
+		if err.Error() == errNoRowsInResultSet.Error() {
+			return types.MonitoredTx{}, types.ErrNotFound
+		}
+
 		return types.MonitoredTx{}, err
 	}
-	defer rows.Close()
 
-	if rows.Next() {
-		return scanMonitoredTxRow(rows)
-	}
-
-	return types.MonitoredTx{}, types.ErrNotFound
+	return mTx, nil
 }
 
 // GetByStatus retrieves monitored transactions from the database that match the provided statuses.
@@ -162,16 +160,17 @@ func (s *SqlStorage) Get(ctx context.Context, id common.Hash) (types.MonitoredTx
 // The transactions are ordered by their creation date (oldest first).
 func (s *SqlStorage) GetByStatus(ctx context.Context, statuses []types.MonitoredTxStatus) ([]types.MonitoredTx, error) {
 	query := baseSelectQuery
+	args := make([]interface{}, 0, len(statuses))
 
-	statusArgs := make([]interface{}, 0, len(statuses))
 	if len(statuses) > 0 {
+		// Build the WHERE clause for status filtering
 		query += " WHERE status IN ("
 		for i, status := range statuses {
 			query += fmt.Sprintf("$%d", i+1)
 			if i != len(statuses)-1 {
 				query += ", "
 			}
-			statusArgs = append(statusArgs, string(status))
+			args = append(args, string(status))
 		}
 		query += ")"
 	}
@@ -179,14 +178,13 @@ func (s *SqlStorage) GetByStatus(ctx context.Context, statuses []types.Monitored
 	// Add ordering by creation date (oldest first)
 	query += " ORDER BY created_at ASC"
 
-	// Execute the query and handle the result.
-	rows, err := s.db.QueryContext(ctx, query, statusArgs...)
-	if err != nil {
-		return nil, err
+	// Use meddler.QueryAll to retrieve the monitored transactions
+	var transactions []*types.MonitoredTx
+	if err := meddler.QueryAll(s.db, &transactions, query, args...); err != nil {
+		return nil, fmt.Errorf("failed to get monitored transactions: %w", err)
 	}
-	defer rows.Close()
 
-	return scanMonitoredTxRows(rows)
+	return localCommon.SlicePtrsToSlice(transactions), nil
 }
 
 // GetByBlock loads all monitored transactions that have the blockNumber between fromBlock and toBlock.
@@ -211,64 +209,29 @@ func (s *SqlStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64)
 		args = append(args, *toBlock)
 	}
 
-	log.Info(fmt.Sprintf("Query: %s", query))
-
-	// Add ordering by creation date (oldest first)
-	query += " ORDER BY created_at ASC"
-
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	// Use meddler.QueryAll to execute the query and scan into the result slice.
+	var monitoredTxs []*types.MonitoredTx
+	err := meddler.QueryAll(s.db, &monitoredTxs, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, fmt.Errorf("failed to query monitored transactions: %w", err)
 	}
-	defer rows.Close()
 
-	return scanMonitoredTxRows(rows)
+	return localCommon.SlicePtrsToSlice(monitoredTxs), nil
 }
 
 // Update a persisted monitored tx
 func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
+	// Set the updated time to the current time.
 	mTx.UpdatedAt = time.Now()
 
-	query := `
-		UPDATE monitored_txs
-		SET from_address = $1,
-		    to_address = $2,
-		    nonce = $3,
-		    "value" = $4,
-		    tx_data = $5,
-		    gas = $6,
-		    gas_offset = $7,
-		    gas_price = $8,
-		    blob_sidecar = $9,
-		    blob_gas = $10,
-		    blob_gas_price = $11,
-		    gas_tip_cap = $12,
-		    "status" = $13,
-		    block_number = $14,
-		    history = $15,
-		    updated_at = $16,
-		    estimate_gas = $17
-		WHERE id = $18
-	`
-
-	args, err := prepareArgs(mTx, Update)
+	// Use meddler.Update to perform the update, which automatically constructs the query.
+	err := meddler.Update(s.db, monitoredTxsTable, &mTx)
 	if err != nil {
-		return err
-	}
-
-	// Execute the query with the arguments
-	result, err := s.db.ExecContext(ctx, query, args...)
-	if err != nil {
+		// Check if it's a "no rows affected" situation (for example, if the transaction ID is not found).
+		if err == sql.ErrNoRows {
+			return types.ErrNotFound
+		}
 		return fmt.Errorf("failed to update monitored transaction: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return types.ErrNotFound
 	}
 
 	return nil
@@ -276,9 +239,7 @@ func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 
 // Empty clears all the records from the monitored_txs table.
 func (s *SqlStorage) Empty(ctx context.Context) error {
-	query := "DELETE FROM monitored_txs"
-
-	_, err := s.db.ExecContext(ctx, query)
+	_, err := s.db.ExecContext(ctx, baseDeleteStatement)
 	if err != nil {
 		return fmt.Errorf("failed to empty monitored_txs table: %w", err)
 	}
@@ -286,194 +247,25 @@ func (s *SqlStorage) Empty(ctx context.Context) error {
 	return nil
 }
 
-// prepareArgs prepares the arguments for the SQL query.
-func prepareArgs(mTx types.MonitoredTx, action sqlAction) ([]interface{}, error) {
-	toAddress := prepareNullableString(mTx.To)
-	blockNumber := prepareNullableString(mTx.BlockNumber)
-	value := prepareNullableString(mTx.Value)
-	gasPrice := prepareNullableString(mTx.GasPrice)
-	blobGasPrice := prepareNullableString(mTx.BlobGasPrice)
-	gasTipCap := prepareNullableString(mTx.GasTipCap)
-
-	historyJSON, blobSidecar, err := encodeHistoryAndBlobSidecar(mTx)
-	if err != nil {
-		return nil, err
+// UnwrapSQLiteErr attempts to extract a *sqlite.Error from the given error.
+// It first checks if the error is directly of type *sqlite.Error, and if not,
+// it tries to unwrap it from a meddler.DriverErr.
+//
+// Params:
+//   - err: The error to check.
+//
+// Returns:
+//   - *sqlite.Error: The extracted SQLite error, or nil if not found.
+//   - bool: True if the error was successfully unwrapped as a *sqlite.Error.
+func UnwrapSQLiteErr(err error) (*sqlite.Error, bool) {
+	sqliteErr := &sqlite.Error{}
+	if ok := errors.As(err, sqliteErr); ok {
+		return sqliteErr, true
 	}
 
-	args := []interface{}{
-		mTx.From.Hex(),
-		toAddress,
-		mTx.Nonce,
-		value,
-		mTx.Data,
-		mTx.Gas,
-		mTx.GasOffset,
-		gasPrice,
-		blobSidecar,
-		mTx.BlobGas,
-		blobGasPrice,
-		gasTipCap,
-		mTx.Status,
-		blockNumber,
-		historyJSON,
-		mTx.UpdatedAt.Format(time.RFC3339),
-		localCommon.BoolToInteger(mTx.EstimateGas),
+	if driverErr, ok := meddler.DriverErr(err); ok {
+		return sqliteErr, errors.As(driverErr, sqliteErr)
 	}
 
-	switch action {
-	case Insert:
-		args = append([]interface{}{mTx.ID.Hex()}, args...)
-		args = append(args, mTx.CreatedAt.Format(time.RFC3339))
-
-	case Update:
-		args = append(args, mTx.ID.Hex())
-
-	default:
-		return nil, fmt.Errorf("unsupported SQL action provided %s", action)
-	}
-
-	return args, nil
-}
-
-// scanMonitoredTxRow is a helper function to scan a row into a MonitoredTx object
-func scanMonitoredTxRow(rows *sql.Rows) (types.MonitoredTx, error) {
-	var (
-		mTx             types.MonitoredTx
-		txID            string
-		fromAddress     string
-		toAddress       sql.NullString // Nullable field for `to_address`.
-		blockNumber     sql.NullString // Nullable field for `block_number`.
-		value           sql.NullString // Nullable big.Int fields.
-		gasPrice        sql.NullString // Nullable big.Int fields.
-		blobGasPrice    sql.NullString // Nullable big.Int fields.
-		gasTipCap       sql.NullString // Nullable big.Int fields.
-		blobSidecarJSON []byte
-		historyJSON     []byte
-		createdAtString string
-		updatedAtString string
-		status          string
-	)
-
-	err := rows.Scan(
-		&txID,
-		&fromAddress,
-		&toAddress,
-		&mTx.Nonce,
-		&value,
-		&mTx.Data,
-		&mTx.Gas,
-		&mTx.GasOffset,
-		&gasPrice,
-		&blobSidecarJSON,
-		&mTx.BlobGas,
-		&blobGasPrice,
-		&gasTipCap,
-		&status,
-		&blockNumber,
-		&historyJSON,
-		&createdAtString,
-		&updatedAtString,
-		&mTx.EstimateGas,
-	)
-	if err != nil {
-		return types.MonitoredTx{}, err
-	}
-
-	mTx.ID = common.HexToHash(txID)
-	mTx.From = common.HexToAddress(fromAddress)
-	// Set the MonitoredTxStatus from the retrieved string
-	mTx.Status = types.MonitoredTxStatus(status)
-
-	// Populate nullable fields
-	mTx.PopulateNullableStrings(toAddress, blockNumber, value, gasPrice, blobGasPrice, gasTipCap)
-
-	if len(blobSidecarJSON) > 0 {
-		// Unmarshal the BlobSidecar JSON
-		if err := json.Unmarshal(blobSidecarJSON, &mTx.BlobSidecar); err != nil {
-			return types.MonitoredTx{}, err
-		}
-	}
-
-	if len(historyJSON) > 0 {
-		// Unmarshal the history JSON back into the map
-		if err := json.Unmarshal(historyJSON, &mTx.History); err != nil {
-			return types.MonitoredTx{}, err
-		}
-	}
-
-	createdAt, err := parseRFC3339Time(createdAtString)
-	if err != nil {
-		return types.MonitoredTx{}, err
-	}
-
-	updatedAt, err := parseRFC3339Time(updatedAtString)
-	if err != nil {
-		return types.MonitoredTx{}, err
-	}
-
-	mTx.CreatedAt = createdAt
-	mTx.UpdatedAt = updatedAt
-
-	return mTx, nil
-}
-
-// scanMonitoredTxRows is a helper function to scan multiple rows
-func scanMonitoredTxRows(rows *sql.Rows) ([]types.MonitoredTx, error) {
-	var mTxs []types.MonitoredTx
-	for rows.Next() {
-		mTx, err := scanMonitoredTxRow(rows)
-		if err != nil {
-			return nil, err
-		}
-		mTxs = append(mTxs, mTx)
-	}
-
-	// Check for any errors during iteration
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return mTxs, nil
-}
-
-// encodeHistoryAndBlobSidecar marshals the history and blob sidecar into a JSON.
-func encodeHistoryAndBlobSidecar(mTx types.MonitoredTx) ([]byte, []byte, error) {
-	historyJSON, err := json.Marshal(mTx.History)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal transaction history: %w", err)
-	}
-
-	blobSidecar, err := mTx.EncodeBlobSidecarToJSON()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return historyJSON, blobSidecar, nil
-}
-
-// prepareNullableString prepares a sql.NullString from a nullable fields.
-func prepareNullableString(value interface{}) sql.NullString {
-	switch v := value.(type) {
-	case *common.Address:
-		if v != nil {
-			return sql.NullString{Valid: true, String: v.Hex()}
-		}
-
-	case *big.Int:
-		if v != nil {
-			return sql.NullString{Valid: true, String: v.String()}
-		}
-	}
-
-	return sql.NullString{Valid: false}
-}
-
-// parseRFC3339Time parses provided string (formatted as RFC3339) into time.Time
-func parseRFC3339Time(timeRaw string) (time.Time, error) {
-	parsedTime, err := time.Parse(time.RFC3339, timeRaw)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	return parsedTime, nil
+	return sqliteErr, false
 }

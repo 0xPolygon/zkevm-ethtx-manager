@@ -35,3 +35,16 @@ func ToAddressPtr(addr string) *common.Address {
 func ToUint64Ptr(v uint64) *uint64 {
 	return &v
 }
+
+// SlicePtrsToSlice converts a slice of pointers to a slice of values.
+func SlicePtrsToSlice[T any](ptrSlice []*T) []T {
+	// Create a new slice to hold the values
+	res := make([]T, len(ptrSlice))
+	// Dereference each pointer and add the value to the result slice
+	for i, ptr := range ptrSlice {
+		if ptr != nil {
+			res[i] = *ptr
+		}
+	}
+	return res
+}
