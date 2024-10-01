@@ -68,7 +68,6 @@ func TestSqlStorage_Add(t *testing.T) {
 func TestSqlStorage_Remove(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup a temporary SQLite database for testing
 	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
@@ -77,7 +76,6 @@ func TestSqlStorage_Remove(t *testing.T) {
 	tx := newMonitoredTx("0x1", "0xSender1", "0xReceiver1", 1, types.MonitoredTxStatusCreated, 100)
 	require.NoError(t, storage.Add(ctx, tx))
 
-	// Define test cases
 	tests := []struct {
 		name        string
 		id          common.Hash
@@ -110,7 +108,6 @@ func TestSqlStorage_Remove(t *testing.T) {
 func TestSqlStorage_Get(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup a temporary SQLite database for testing
 	storage, err := NewStorage("sqlite3", ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
@@ -119,7 +116,6 @@ func TestSqlStorage_Get(t *testing.T) {
 	tx := newMonitoredTx("0x1", "0xSender1", "0xReceiver1", 1, types.MonitoredTxStatusCreated, 100)
 	require.NoError(t, storage.Add(ctx, tx))
 
-	// Define test cases
 	tests := []struct {
 		name        string
 		id          common.Hash
@@ -156,7 +152,6 @@ func TestSqlStorage_Get(t *testing.T) {
 func TestSqlStorage_GetByStatus(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup a temporary SQLite database for testing
 	storage, err := NewStorage("sqlite3", ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
@@ -169,7 +164,6 @@ func TestSqlStorage_GetByStatus(t *testing.T) {
 		require.NoError(t, storage.Add(ctx, tx))
 	}
 
-	// Define test cases
 	tests := []struct {
 		name        string
 		statuses    []types.MonitoredTxStatus
@@ -197,7 +191,6 @@ func TestSqlStorage_GetByStatus(t *testing.T) {
 			result, err := storage.GetByStatus(ctx, test.statuses)
 			require.NoError(t, err)
 
-			// Extract IDs from the result
 			var resultIDs []common.Hash
 			for _, tx := range result {
 				resultIDs = append(resultIDs, tx.ID)
@@ -211,7 +204,6 @@ func TestSqlStorage_GetByStatus(t *testing.T) {
 func TestSqlStorage_GetByBlock(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup a temporary SQLite database for testing
 	storage, err := NewStorage("sqlite3", ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
@@ -224,7 +216,6 @@ func TestSqlStorage_GetByBlock(t *testing.T) {
 		require.NoError(t, storage.Add(ctx, tx))
 	}
 
-	// Define test cases
 	tests := []struct {
 		name        string
 		fromBlock   *uint64
@@ -269,7 +260,6 @@ func TestSqlStorage_GetByBlock(t *testing.T) {
 
 func TestSqlStorage_Update(t *testing.T) {
 	t.Skip("FIXME")
-
 	ctx := context.Background()
 
 	// Setup a temporary SQLite database for testing
@@ -278,7 +268,7 @@ func TestSqlStorage_Update(t *testing.T) {
 	defer storage.db.Close()
 
 	// Add an initial transaction to update
-	tx := newMonitoredTx("0x1", "0xSender1", "0xReceiver1", 1, types.MonitoredTxStatusCreated, 100)
+	tx := newMonitoredTx("0x1", "0x2", "0x3", 1, types.MonitoredTxStatusCreated, 100)
 	require.NoError(t, storage.Add(ctx, tx))
 
 	// Define test cases
@@ -291,7 +281,7 @@ func TestSqlStorage_Update(t *testing.T) {
 			name: "Update existing transaction",
 			updateTx: types.MonitoredTx{
 				ID:          tx.ID,
-				From:        common.HexToAddress("0xUpdatedSender"),
+				From:        common.HexToAddress("0x123456789"),
 				To:          localCommon.ToAddressPtr("0x123456789"),
 				Nonce:       1,
 				Value:       big.NewInt(200),

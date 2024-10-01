@@ -47,7 +47,7 @@ func (s MonitoredTxStatus) String() string {
 // plus information to monitor if the transactions was sent successfully
 type MonitoredTx struct {
 	// ID is the tx identifier controlled by the caller
-	ID common.Hash `mapstructure:"id" meddler:"id,hash"`
+	ID common.Hash `mapstructure:"id" meddler:"id,pk,hash"`
 
 	// From is the sender of the tx, used to identify which private key should be used to sign the tx
 	From common.Address `mapstructure:"from" meddler:"from_address,address"`
