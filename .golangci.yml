@@ -3,7 +3,8 @@ run:
   timeout: 5m
   skip-dirs:
     - test
-    
+    - mocks
+
 linters:
   enable:
   - whitespace # Tool for detection of leading and trailing whitespace
