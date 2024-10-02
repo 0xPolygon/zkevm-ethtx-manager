@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS monitored_txs (
     blob_gas_price TEXT,           -- *big.Int
     gas_tip_cap TEXT,              -- *big.Int
     "status" TEXT NOT NULL,
-    block_number TEXT NOT NULL,    -- *big.Int
+    block_number BIGINT NOT NULL,
     history JSONB,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
