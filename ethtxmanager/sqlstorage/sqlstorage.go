@@ -219,8 +219,7 @@ func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 	}
 
 	// Add the WHERE clause for the primary key
-	builder.WriteString(" WHERE id = $")
-	builder.WriteString(strconv.Itoa(len(columns)))
+	builder.WriteString(" WHERE id = $" + strconv.Itoa(len(columns)))
 
 	query := builder.String()
 
