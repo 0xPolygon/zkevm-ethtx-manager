@@ -107,7 +107,7 @@ func TestSqlStorage_Remove(t *testing.T) {
 func TestSqlStorage_Get(t *testing.T) {
 	ctx := context.Background()
 
-	storage, err := NewStorage("sqlite3", ":memory:")
+	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
 
@@ -151,7 +151,7 @@ func TestSqlStorage_Get(t *testing.T) {
 func TestSqlStorage_GetByStatus(t *testing.T) {
 	ctx := context.Background()
 
-	storage, err := NewStorage("sqlite3", ":memory:")
+	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
 
@@ -203,7 +203,7 @@ func TestSqlStorage_GetByStatus(t *testing.T) {
 func TestSqlStorage_GetByBlock(t *testing.T) {
 	ctx := context.Background()
 
-	storage, err := NewStorage("sqlite3", ":memory:")
+	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
 
@@ -261,7 +261,7 @@ func TestSqlStorage_Update(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup a temporary SQLite database for testing
-	storage, err := NewStorage("sqlite3", ":memory:")
+	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
 
@@ -321,14 +321,7 @@ func TestSqlStorage_Update(t *testing.T) {
 				// Verify that the transaction was updated correctly
 				updatedTx, err := storage.Get(ctx, test.updateTx.ID)
 				require.NoError(t, err)
-				require.Equal(t, test.updateTx.From, updatedTx.From)
-				require.Equal(t, test.updateTx.To, updatedTx.To)
-				require.Equal(t, test.updateTx.Value, updatedTx.Value)
-				require.Equal(t, test.updateTx.Data, updatedTx.Data)
-				require.Equal(t, test.updateTx.Gas, updatedTx.Gas)
-				require.Equal(t, test.updateTx.GasPrice, updatedTx.GasPrice)
-				require.Equal(t, test.updateTx.Status, updatedTx.Status)
-				require.Equal(t, test.updateTx.BlockNumber, updatedTx.BlockNumber)
+				compareTxsWithoutDates(t, test.updateTx, updatedTx)
 			}
 		})
 	}
@@ -338,7 +331,7 @@ func TestSqlStorage_Empty(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup a temporary SQLite database for testing
-	storage, err := NewStorage("sqlite3", ":memory:")
+	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
 	require.NoError(t, err)
 	defer storage.db.Close()
 
@@ -363,6 +356,19 @@ func TestSqlStorage_Empty(t *testing.T) {
 	require.ErrorIs(t, err, types.ErrNotFound)
 	_, err = storage.Get(ctx, tx2.ID)
 	require.ErrorIs(t, err, types.ErrNotFound)
+}
+
+func TestSqlStorage_MonitoredTxTableExists(t *testing.T) {
+	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
+	require.NoError(t, err)
+	defer storage.db.Close()
+
+	// Check if the monitored_txs table exists
+	query := `SELECT name FROM sqlite_master WHERE type='table' AND name='monitored_txs';`
+	var tableName string
+	err = storage.db.QueryRow(query).Scan(&tableName)
+	require.NoError(t, err)
+	require.Equal(t, "monitored_txs", tableName)
 }
 
 // Helper function to create a MonitoredTx for testing
