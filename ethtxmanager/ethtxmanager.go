@@ -48,8 +48,8 @@ type Client struct {
 	cancel context.CancelFunc
 
 	cfg      Config
-	etherman EthermanInterface
-	storage  StorageInterface
+	etherman types.EthermanInterface
+	storage  types.StorageInterface
 	from     common.Address
 }
 
@@ -173,13 +173,13 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 
 // Add a transaction to be sent and monitored
 func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int,
-	data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
+	data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar) (common.Hash, error) {
 	return c.add(ctx, to, value, data, gasOffset, sidecar, 0)
 }
 
 // AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
 func (c *Client) AddWithGas(ctx context.Context, to *common.Address,
-	value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+	value *big.Int, data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar, gas uint64) (common.Hash, error) {
 	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
 }
 
@@ -486,7 +486,7 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 	for _, mTx := range iterations {
 		mTx := mTx // force variable shadowing to avoid pointer conflicts
 		go func(c *Client, mTx *monitoredTxnIteration) {
-			mTxLogger := createMonitoredTxLogger(*mTx.monitoredTx)
+			mTxLogger := createMonitoredTxLogger(*mTx.MonitoredTx)
 			defer func(mTxLogger *log.Logger) {
 				if err := recover(); err != nil {
 					mTxLogger.Errorf("monitoring recovered from this err: %v", err)
@@ -591,10 +591,10 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 	var err error
 	logger.Info("processing")
 
-	var signedTx *types.Transaction
+	var signedTx *ethTypes.Transaction
 	if !mTx.confirmed {
 		// review tx and increase gas and gas price if needed
-		if mTx.Status == MonitoredTxStatusSent {
+		if mTx.Status == types.MonitoredTxStatusSent {
 			err := c.reviewMonitoredTxGas(ctx, mTx, logger)
 			if err != nil {
 				logger.Errorf("failed to review monitored tx: %v", err)
@@ -623,7 +623,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			return
 		} else {
 			// update monitored tx changes into storage
-			err = c.storage.Update(ctx, *mTx.monitoredTx)
+			err = c.storage.Update(ctx, *mTx.MonitoredTx)
 			if err != nil {
 				logger.Errorf("failed to update monitored tx: %v", err)
 				return
@@ -647,7 +647,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 				mTx.Status = types.MonitoredTxStatusSent
 				logger.Debugf("status changed to %v", string(mTx.Status))
 				// update monitored tx changes into storage
-				err = c.storage.Update(ctx, *mTx.monitoredTx)
+				err = c.storage.Update(ctx, *mTx.MonitoredTx)
 				if err != nil {
 					logger.Errorf("failed to update monitored tx changes: %v", err)
 					return
@@ -697,8 +697,8 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 	}
 
 	// if mined, check receipt and mark as Failed or Confirmed
-	if mTx.lastReceipt.Status == types.ReceiptStatusSuccessful {
-		mTx.Status = MonitoredTxStatusMined
+	if mTx.lastReceipt.Status == ethTypes.ReceiptStatusSuccessful {
+		mTx.Status = types.MonitoredTxStatusMined
 		mTx.BlockNumber = mTx.lastReceipt.BlockNumber
 		logger.Info("mined")
 	} else {
@@ -708,13 +708,13 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			return
 		}
 		// otherwise we understand this monitored tx has failed
-		mTx.Status = MonitoredTxStatusFailed
+		mTx.Status = types.MonitoredTxStatusFailed
 		mTx.BlockNumber = mTx.lastReceipt.BlockNumber
 		logger.Info("failed")
 	}
 
 	// update monitored tx changes into storage
-	err = c.storage.Update(ctx, *mTx.monitoredTx)
+	err = c.storage.Update(ctx, *mTx.MonitoredTx)
 	if err != nil {
 		logger.Errorf("failed to update monitored tx: %v", err)
 		return
@@ -723,7 +723,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 
 // shouldContinueToMonitorThisTx checks the the tx receipt and decides if it should
 // continue or not to monitor the monitored tx related to the tx from this receipt
-func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt *types.Receipt) bool {
+func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt *ethTypes.Receipt) bool {
 	// if the receipt has a is successful result, stop monitoring
 	if receipt.Status == ethTypes.ReceiptStatusSuccessful {
 		return false
@@ -845,7 +845,7 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 		mTx.Gas = gas
 	}
 
-	err = c.storage.Update(ctx, *mTx.monitoredTx)
+	err = c.storage.Update(ctx, *mTx.MonitoredTx)
 	if err != nil {
 		return fmt.Errorf("failed to update monitored tx changes: %w", err)
 	}
@@ -855,7 +855,8 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 
 // getMonitoredTxnIteration gets all monitored txs that need to be sent or resent in current monitor iteration
 func (c *Client) getMonitoredTxnIteration(ctx context.Context) ([]*monitoredTxnIteration, error) {
-	txsToUpdate, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent})
+	txsToUpdate, err := c.storage.GetByStatus(ctx,
+		[]types.MonitoredTxStatus{types.MonitoredTxStatusCreated, types.MonitoredTxStatusSent})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get txs to update nonces: %w", err)
 	}
@@ -866,7 +867,7 @@ func (c *Client) getMonitoredTxnIteration(ctx context.Context) ([]*monitoredTxnI
 	for _, tx := range txsToUpdate {
 		tx := tx
 
-		iteration := &monitoredTxnIteration{monitoredTx: &tx}
+		iteration := &monitoredTxnIteration{MonitoredTx: &tx}
 		iterations = append(iterations, iteration)
 
 		updateNonce := iteration.shouldUpdateNonce(ctx, c.etherman)

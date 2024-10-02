@@ -4,14 +4,7 @@ filename: "{{.InterfaceName | lower }}.generated.go"
 mockname: "{{.InterfaceName}}"
 outpkg: "mocks"
 packages:
-  github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager:
+  github.com/0xPolygon/zkevm-ethtx-manager/types:
     interfaces:
       EthermanInterface:
         config:
-      StorageInterface:
-        config:
-          dir: "{{.InterfaceDir}}"
-          filename: "{{.InterfaceName | lower }}.generated.go"
-          mockname: "{{.InterfaceName}}Mock"
-          outpkg: "{{.PackageName}}"
-          inpackage: True
