@@ -3,10 +3,10 @@ package sqlstorage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
@@ -16,32 +16,6 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/russross/meddler"
 )
-
-const (
-	// Insert denotes insert statement
-	Insert sqlAction = iota
-	// Update denotes update statement
-	Update
-	// Delete denotes delete statement
-	Delete
-)
-
-type sqlAction int
-
-func (s sqlAction) String() string {
-	switch s {
-	case Insert:
-		return "INSERT"
-
-	case Update:
-		return "UPDATE"
-
-	case Delete:
-		return "DELETE"
-	}
-
-	return "UNKNOWN"
-}
 
 const (
 	// baseSelectQuery represents the base select query, that retrieves all the values from the monitored_txs table
@@ -109,7 +83,7 @@ func (s *SqlStorage) Add(_ context.Context, mTx types.MonitoredTx) error {
 		}
 
 		if sqlErr.Code == sqlite.ErrConstraint {
-			return fmt.Errorf("transaction with ID %s already exists", mTx.ID)
+			return types.ErrAlreadyExists
 		}
 	}
 
@@ -226,32 +200,49 @@ func (s *SqlStorage) GetByBlock(ctx context.Context, fromBlock, toBlock *uint64)
 func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 	mTx.UpdatedAt = time.Now()
 
-	query := `
-		UPDATE monitored_txs
-		SET from_address = $1,
-		    to_address = $2,
-		    nonce = $3,
-		    "value" = $4,
-		    tx_data = $5,
-		    gas = $6,
-		    gas_offset = $7,
-		    gas_price = $8,
-		    blob_sidecar = $9,
-		    blob_gas = $10,
-		    blob_gas_price = $11,
-		    gas_tip_cap = $12,
-		    "status" = $13,
-		    block_number = $14,
-		    history = $15,
-		    updated_at = $16,
-		    estimate_gas = $17
-		WHERE id = $18
-	`
+	columns, err := meddler.Columns(&mTx, false)
+	if err != nil {
+		return fmt.Errorf("failed to build the update statement (column names resolution failed): %w", err)
+	}
 
-	args, err := prepareArgs(mTx, Update)
+	setClause := ""
+	for i, col := range columns[1:] {
+		if i > 0 {
+			setClause += ", "
+		}
+		setClause += fmt.Sprintf("%s = $%d", col, i+1)
+	}
+
+	// Use strings.Builder instead of fmt.Sprintf for safer query building
+	var builder strings.Builder
+	builder.WriteString("UPDATE " + monitoredTxsTable + " SET ")
+
+	// Build the SET clause
+	// Skip the first column (primary key)
+	for i, column := range columns[1:] {
+		if i > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteString(column + " = $" + strconv.Itoa(i+1))
+	}
+
+	// Add the WHERE clause for the primary key
+	builder.WriteString(" WHERE id = $")
+	builder.WriteString(strconv.Itoa(len(columns)))
+
+	query := builder.String()
+
+	args, err := meddler.Values(&mTx, false)
 	if err != nil {
 		return err
 	}
+
+	if len(args) == 0 {
+		return fmt.Errorf("failed to update monitored transaction %s, as there are no arguments", mTx.ID.Hex())
+	}
+
+	// append the primary key at the end
+	args = append(args[1:], mTx.ID.Hex())
 
 	// Execute the query with the arguments
 	result, err := s.db.ExecContext(ctx, query, args...)
@@ -302,85 +293,4 @@ func UnwrapSQLiteErr(err error) (*sqlite.Error, bool) {
 	}
 
 	return sqliteErr, false
-}
-
-// prepareArgs prepares the arguments for the SQL query.
-func prepareArgs(mTx types.MonitoredTx, action sqlAction) ([]interface{}, error) {
-	toAddress := prepareNullableString(mTx.To)
-	blockNumber := prepareNullableString(mTx.BlockNumber)
-	value := prepareNullableString(mTx.Value)
-	gasPrice := prepareNullableString(mTx.GasPrice)
-	blobGasPrice := prepareNullableString(mTx.BlobGasPrice)
-	gasTipCap := prepareNullableString(mTx.GasTipCap)
-
-	historyJSON, blobSidecar, err := encodeHistoryAndBlobSidecar(mTx)
-	if err != nil {
-		return nil, err
-	}
-
-	args := []interface{}{
-		mTx.From.Hex(),
-		toAddress,
-		mTx.Nonce,
-		value,
-		mTx.Data,
-		mTx.Gas,
-		mTx.GasOffset,
-		gasPrice,
-		blobSidecar,
-		mTx.BlobGas,
-		blobGasPrice,
-		gasTipCap,
-		mTx.Status,
-		blockNumber,
-		historyJSON,
-		mTx.UpdatedAt.Format(time.RFC3339),
-		localCommon.BoolToInteger(mTx.EstimateGas),
-	}
-
-	switch action {
-	case Insert:
-		args = append([]interface{}{mTx.ID.Hex()}, args...)
-		args = append(args, mTx.CreatedAt.Format(time.RFC3339))
-
-	case Update:
-		args = append(args, mTx.ID.Hex())
-
-	default:
-		return nil, fmt.Errorf("unsupported SQL action provided %s", action)
-	}
-
-	return args, nil
-}
-
-// prepareNullableString prepares a sql.NullString from a nullable fields.
-func prepareNullableString(value interface{}) sql.NullString {
-	switch v := value.(type) {
-	case *common.Address:
-		if v != nil {
-			return sql.NullString{Valid: true, String: v.Hex()}
-		}
-
-	case *big.Int:
-		if v != nil {
-			return sql.NullString{Valid: true, String: v.String()}
-		}
-	}
-
-	return sql.NullString{Valid: false}
-}
-
-// encodeHistoryAndBlobSidecar marshals the history and blob sidecar into a JSON.
-func encodeHistoryAndBlobSidecar(mTx types.MonitoredTx) ([]byte, []byte, error) {
-	historyJSON, err := json.Marshal(mTx.History)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal transaction history to JSON: %w", err)
-	}
-
-	blobSidecarJSON, err := json.Marshal(mTx.BlobSidecar)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal blob sidecar to JSON: %w", err)
-	}
-
-	return historyJSON, blobSidecarJSON, nil
 }

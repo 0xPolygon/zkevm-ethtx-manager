@@ -2,7 +2,6 @@ package sqlstorage
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -43,7 +42,7 @@ func TestSqlStorage_Add(t *testing.T) {
 		{
 			name:        "Add duplicate transaction",
 			mTx:         newMonitoredTx("0x1", "0xSender1", "0xReceiver1", 1, types.MonitoredTxStatusCreated, 100),
-			expectedErr: fmt.Errorf("transaction with ID %s already exists", common.HexToHash("0x1")),
+			expectedErr: types.ErrAlreadyExists,
 		},
 	}
 
@@ -51,7 +50,7 @@ func TestSqlStorage_Add(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			err := storage.Add(ctx, test.mTx)
 			if test.expectedErr != nil {
-				require.ErrorContains(t, err, test.expectedErr.Error())
+				require.ErrorIs(t, err, test.expectedErr)
 			} else {
 				require.NoError(t, err)
 
@@ -289,6 +288,7 @@ func TestSqlStorage_Update(t *testing.T) {
 				GasPrice:    big.NewInt(6000000000),
 				Status:      types.MonitoredTxStatusMined,
 				BlockNumber: big.NewInt(200),
+				CreatedAt:   time.Now(),
 			},
 			expectedErr: nil,
 		},
@@ -363,44 +363,6 @@ func TestSqlStorage_Empty(t *testing.T) {
 	require.ErrorIs(t, err, types.ErrNotFound)
 	_, err = storage.Get(ctx, tx2.ID)
 	require.ErrorIs(t, err, types.ErrNotFound)
-}
-
-func TestSqlAction_String(t *testing.T) {
-	tests := []struct {
-		name     string
-		action   sqlAction
-		expected string
-	}{
-		{
-			name:     "Insert action",
-			action:   Insert,
-			expected: "INSERT",
-		},
-		{
-			name:     "Update action",
-			action:   Update,
-			expected: "UPDATE",
-		},
-		{
-			name:     "Delete action",
-			action:   Delete,
-			expected: "DELETE",
-		},
-		{
-			name:     "Unknown action",
-			action:   sqlAction(999), // Some invalid action value
-			expected: "UNKNOWN",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result := test.action.String()
-			if result != test.expected {
-				t.Errorf("expected %s, got %s", test.expected, result)
-			}
-		})
-	}
 }
 
 // Helper function to create a MonitoredTx for testing

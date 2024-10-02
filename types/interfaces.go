@@ -20,7 +20,6 @@ var (
 // EthermanInterface defines a set of methods for interacting with the Ethereum blockchain,
 // including transaction management, gas estimation, signing, and retrieving blockchain information.
 type EthermanInterface interface {
-
 	// GetTx retrieves a transaction by its hash from the blockchain.
 	// Returns the transaction, a boolean indicating if it exists in the pending pool, and an error if any.
 	GetTx(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error)
