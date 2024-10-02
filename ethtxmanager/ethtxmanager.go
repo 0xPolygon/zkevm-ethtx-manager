@@ -153,16 +153,19 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 }
 
 // Add a transaction to be sent and monitored
-func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
+func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int,
+	data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
 	return c.add(ctx, to, value, data, gasOffset, sidecar, 0)
 }
 
 // AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
-func (c *Client) AddWithGas(ctx context.Context, to *common.Address, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+func (c *Client) AddWithGas(ctx context.Context, to *common.Address,
+	value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
 	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
 }
 
-func (c *Client) add(ctx context.Context, to *common.Address, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+func (c *Client) add(ctx context.Context, to *common.Address,
+	value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
 	var err error
 
 	// get gas price
