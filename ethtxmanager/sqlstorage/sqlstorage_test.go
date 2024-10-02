@@ -2,7 +2,9 @@ package sqlstorage
 
 import (
 	"context"
+	"fmt"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -356,6 +358,54 @@ func TestSqlStorage_Empty(t *testing.T) {
 	require.ErrorIs(t, err, types.ErrNotFound)
 	_, err = storage.Get(ctx, tx2.ID)
 	require.ErrorIs(t, err, types.ErrNotFound)
+}
+
+func TestSingleReaderMultipleWriters(t *testing.T) {
+	storage, err := NewStorage(localCommon.SQLLiteDriverName, ":memory:")
+	require.NoError(t, err)
+	defer storage.db.Close()
+
+	ctx := context.Background()
+
+	numWriterGoroutines := 5
+	numRecordsPerGoroutine := 10
+
+	var wg sync.WaitGroup
+
+	// Function to insert records concurrently (producers)
+	insertRecords := func(start, end int) {
+		defer wg.Done()
+
+		for i := start; i < end; i++ {
+			mTx := newMonitoredTx(
+				fmt.Sprintf("0x%x", i),         // ID
+				fmt.Sprintf("0x%x", i+1),       // Sender
+				fmt.Sprintf("0x%x", i+2),       // Receiver
+				uint64(i),                      // Nonce
+				types.MonitoredTxStatusCreated, // Status
+				10,                             // BlockNumber
+			)
+			err := storage.Add(ctx, mTx)
+			require.NoError(t, err)
+		}
+	}
+
+	// Start writer goroutines (multiple producers)
+	for i := 0; i < numWriterGoroutines; i++ {
+		wg.Add(1)
+		start := i * numRecordsPerGoroutine
+		end := start + numRecordsPerGoroutine
+		go insertRecords(start, end)
+	}
+
+	// Wait for the single reader to finish after the writers signal completion
+	wg.Wait()
+
+	// Now ensure all the records were inserted properly (using consistent ID formatting)
+	for i := 0; i < numWriterGoroutines*numRecordsPerGoroutine; i++ {
+		_, err := storage.Get(ctx, common.HexToHash(fmt.Sprintf("0x%x", i)))
+		require.NoError(t, err, "record not found for ID %d", i)
+	}
 }
 
 func TestSqlStorage_MonitoredTxTableExists(t *testing.T) {
