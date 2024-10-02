@@ -12,15 +12,6 @@ const (
 	SQLLiteDriverName = "sqlite3"
 )
 
-// BoolToInteger converts the provided boolean value into integer value
-func BoolToInteger(v bool) int {
-	if v {
-		return 1
-	}
-
-	return 0
-}
-
 // ToAddressPtr converts a string to a common.Address pointer or returns nil if empty.
 func ToAddressPtr(addr string) *common.Address {
 	if addr == "" {

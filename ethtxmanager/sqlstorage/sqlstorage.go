@@ -205,14 +205,6 @@ func (s *SqlStorage) Update(ctx context.Context, mTx types.MonitoredTx) error {
 		return fmt.Errorf("failed to build the update statement (column names resolution failed): %w", err)
 	}
 
-	setClause := ""
-	for i, col := range columns[1:] {
-		if i > 0 {
-			setClause += ", "
-		}
-		setClause += fmt.Sprintf("%s = $%d", col, i+1)
-	}
-
 	// Use strings.Builder instead of fmt.Sprintf for safer query building
 	var builder strings.Builder
 	builder.WriteString("UPDATE " + monitoredTxsTable + " SET ")
