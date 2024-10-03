@@ -5,3 +5,4 @@
 test/sepolia.keystore
 test/ethtxmanager-persistence.json
 test/ethtxmanager-persistence.json.tmp
+coverage.out
