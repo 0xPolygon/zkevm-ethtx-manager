@@ -13,13 +13,16 @@ import (
 	"sync"
 	"time"
 
+	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/sqlstorage"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer/l1_check_block"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core/types"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -45,8 +48,8 @@ type Client struct {
 	cancel context.CancelFunc
 
 	cfg      Config
-	etherman EthermanInterface
-	storage  StorageInterface
+	etherman types.EthermanInterface
+	storage  types.StorageInterface
 	from     common.Address
 }
 
@@ -81,10 +84,15 @@ func New(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
+	storage, err := createStorage(cfg.DBPath)
+	if err != nil {
+		return nil, err
+	}
+
 	client := Client{
 		cfg:      cfg,
 		etherman: etherman,
-		storage:  NewMemStorage(cfg.PersistenceFilename),
+		storage:  storage,
 		from:     auth.From,
 	}
 
@@ -93,7 +101,18 @@ func New(cfg Config) (*Client, error) {
 	return &client, nil
 }
 
-func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string) ([]monitoredTx, error) {
+// createStorage instantiates either SQL storage or in memory storage.
+// In case dbPath parameter is a non-empty string, it creates SQL storage, otherwise in memory one.
+func createStorage(dbPath string) (types.StorageInterface, error) {
+	if dbPath == "" {
+		// if the provided path is empty, use the in memory sql lite storage
+		dbPath = ":memory:"
+	}
+
+	return sqlstorage.NewStorage(localCommon.SQLLiteDriverName, dbPath)
+}
+
+func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string) ([]types.MonitoredTx, error) {
 	response, err := JSONRPCCall(URL, "txpool_content", httpHeaders)
 	if err != nil {
 		return nil, err
@@ -105,7 +124,7 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 		return nil, err
 	}
 
-	var mTxs []monitoredTx
+	mTxs := make([]types.MonitoredTx, 0, len(L1Txs.Pending[from]))
 	for _, tx := range L1Txs.Pending[from] {
 		if common.HexToAddress(tx.From) == from {
 			to := common.HexToAddress(tx.To)
@@ -133,8 +152,8 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 
 			// TODO: handle case of blob transaction
 
-			mTx := monitoredTx{
-				ID:       types.NewTx(&types.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
+			mTx := types.MonitoredTx{
+				ID:       ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
 				From:     common.HexToAddress(tx.From),
 				To:       &to,
 				Nonce:    nonce.Uint64(),
@@ -142,7 +161,7 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 				Data:     data,
 				Gas:      gas.Uint64(),
 				GasPrice: gasPrice,
-				Status:   MonitoredTxStatusSent,
+				Status:   types.MonitoredTxStatusSent,
 				History:  make(map[common.Hash]bool),
 			}
 			mTxs = append(mTxs, mTx)
@@ -154,18 +173,25 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 
 // Add a transaction to be sent and monitored
 func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int,
-	data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
+	data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar) (common.Hash, error) {
 	return c.add(ctx, to, value, data, gasOffset, sidecar, 0)
 }
 
 // AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
 func (c *Client) AddWithGas(ctx context.Context, to *common.Address,
-	value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+	value *big.Int, data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar, gas uint64) (common.Hash, error) {
 	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
 }
 
-func (c *Client) add(ctx context.Context, to *common.Address,
-	value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar, gas uint64) (common.Hash, error) {
+func (c *Client) add(
+	ctx context.Context,
+	to *common.Address,
+	value *big.Int,
+	data []byte,
+	gasOffset uint64,
+	sidecar *ethTypes.BlobTxSidecar,
+	gas uint64,
+) (common.Hash, error) {
 	var err error
 
 	// get gas price
@@ -176,9 +202,12 @@ func (c *Client) add(ctx context.Context, to *common.Address,
 		return common.Hash{}, err
 	}
 
-	var blobFeeCap *big.Int
-	var gasTipCap *big.Int
-	var estimateGas bool
+	var (
+		blobFeeCap  *big.Int
+		gasTipCap   *big.Int
+		estimateGas bool
+	)
+
 	if gas == 0 {
 		estimateGas = true
 	}
@@ -254,15 +283,15 @@ func (c *Client) add(ctx context.Context, to *common.Address,
 	}
 
 	// Calculate id
-	var tx *types.Transaction
+	var tx *ethTypes.Transaction
 	if sidecar == nil {
-		tx = types.NewTx(&types.LegacyTx{
+		tx = ethTypes.NewTx(&ethTypes.LegacyTx{
 			To:    to,
 			Value: value,
 			Data:  data,
 		})
 	} else {
-		tx = types.NewTx(&types.BlobTx{
+		tx = ethTypes.NewTx(&ethTypes.BlobTx{
 			To:         *to,
 			Value:      uint256.MustFromBig(value),
 			Data:       data,
@@ -274,14 +303,14 @@ func (c *Client) add(ctx context.Context, to *common.Address,
 	id := tx.Hash()
 
 	// create monitored tx
-	mTx := monitoredTx{
+	mTx := types.MonitoredTx{
 		ID: id, From: c.from, To: to,
 		Value: value, Data: data,
 		Gas: gas, GasPrice: gasPrice, GasOffset: gasOffset,
 		BlobSidecar:  sidecar,
 		BlobGas:      tx.BlobGas(),
 		BlobGasPrice: blobFeeCap, GasTipCap: gasTipCap,
-		Status:      MonitoredTxStatusCreated,
+		Status:      types.MonitoredTxStatusCreated,
 		History:     make(map[common.Hash]bool),
 		EstimateGas: estimateGas,
 	}
@@ -294,7 +323,7 @@ func (c *Client) add(ctx context.Context, to *common.Address,
 		return common.Hash{}, err
 	}
 
-	mTxLog := log.WithFields("monitoredTx", mTx.ID, "createdAt", mTx.CreatedAt)
+	mTxLog := log.WithFields("types.MonitoredTx", mTx.ID, "createdAt", mTx.CreatedAt)
 	mTxLog.Infof("created")
 
 	return id, nil
@@ -312,13 +341,14 @@ func (c *Client) RemoveAll(ctx context.Context) error {
 
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
 // if the statuses are empty, all the statuses are considered.
-func (c *Client) ResultsByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]MonitoredTxResult, error) {
+func (c *Client) ResultsByStatus(ctx context.Context,
+	statuses []types.MonitoredTxStatus) ([]types.MonitoredTxResult, error) {
 	mTxs, err := c.storage.GetByStatus(ctx, statuses)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]MonitoredTxResult, 0, len(mTxs))
+	results := make([]types.MonitoredTxResult, 0, len(mTxs))
 
 	for _, mTx := range mTxs {
 		result, err := c.buildResult(ctx, mTx)
@@ -332,53 +362,53 @@ func (c *Client) ResultsByStatus(ctx context.Context, statuses []MonitoredTxStat
 }
 
 // Result returns the current result of the transaction execution with all the details
-func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult, error) {
+func (c *Client) Result(ctx context.Context, id common.Hash) (types.MonitoredTxResult, error) {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
-		return MonitoredTxResult{}, err
+		return types.MonitoredTxResult{}, err
 	}
 
 	return c.buildResult(ctx, mTx)
 }
 
-// setStatusSafe sets the status of a monitored tx to MonitoredTxStatusSafe.
+// setStatusSafe sets the status of a monitored tx to types.MonitoredTxStatusSafe.
 func (c *Client) setStatusSafe(ctx context.Context, id common.Hash) error {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	mTx.Status = MonitoredTxStatusSafe
+	mTx.Status = types.MonitoredTxStatusSafe
 	return c.storage.Update(ctx, mTx)
 }
 
-func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxResult, error) {
-	history := mTx.historyHashSlice()
-	txs := make(map[common.Hash]TxResult, len(history))
+func (c *Client) buildResult(ctx context.Context, mTx types.MonitoredTx) (types.MonitoredTxResult, error) {
+	history := mTx.HistoryHashSlice()
+	txs := make(map[common.Hash]types.TxResult, len(history))
 
 	for _, txHash := range history {
 		tx, _, err := c.etherman.GetTx(ctx, txHash)
 		if !errors.Is(err, ethereum.NotFound) && err != nil {
-			return MonitoredTxResult{}, err
+			return types.MonitoredTxResult{}, err
 		}
 
 		receipt, err := c.etherman.GetTxReceipt(ctx, txHash)
 		if !errors.Is(err, ethereum.NotFound) && err != nil {
-			return MonitoredTxResult{}, err
+			return types.MonitoredTxResult{}, err
 		}
 
 		revertMessage, err := c.etherman.GetRevertMessage(ctx, tx)
 		if !errors.Is(err, ethereum.NotFound) && err != nil && err.Error() != ErrExecutionReverted.Error() {
-			return MonitoredTxResult{}, err
+			return types.MonitoredTxResult{}, err
 		}
 
-		txs[txHash] = TxResult{
+		txs[txHash] = types.TxResult{
 			Tx:            tx,
 			Receipt:       receipt,
 			RevertMessage: revertMessage,
 		}
 	}
 
-	result := MonitoredTxResult{
+	result := types.MonitoredTxResult{
 		ID:                 mTx.ID,
 		To:                 mTx.To,
 		Nonce:              mTx.Nonce,
@@ -397,7 +427,7 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 // get mined
 func (c *Client) Start() {
 	// If no persistence file is uses check L1 for pending txs
-	if c.cfg.PersistenceFilename == "" && c.cfg.ReadPendingL1Txs {
+	if c.cfg.DBPath == "" && c.cfg.ReadPendingL1Txs {
 		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.from, c.cfg.Etherman.HTTPHeaders)
 		if err != nil {
 			log.Errorf("failed to get pending txs from L1: %v", err)
@@ -456,7 +486,7 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 	for _, mTx := range iterations {
 		mTx := mTx // force variable shadowing to avoid pointer conflicts
 		go func(c *Client, mTx *monitoredTxnIteration) {
-			mTxLogger := createMonitoredTxLogger(*mTx.monitoredTx)
+			mTxLogger := createMonitoredTxLogger(*mTx.MonitoredTx)
 			defer func(mTxLogger *log.Logger) {
 				if err := recover(); err != nil {
 					mTxLogger.Errorf("monitoring recovered from this err: %v", err)
@@ -473,7 +503,7 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 
 // waitMinedTxToBeSafe checks all mined monitored txs and wait to set the tx as safe
 func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusMined}
+	statusesFilter := []types.MonitoredTxStatus{types.MonitoredTxStatusMined}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to get mined monitored txs: %v", err)
@@ -502,7 +532,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 		if mTx.BlockNumber.Uint64() <= safeBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("safe")
-			mTx.Status = MonitoredTxStatusSafe
+			mTx.Status = types.MonitoredTxStatusSafe
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
 				return fmt.Errorf("failed to update mined monitored tx: %v", err)
@@ -516,7 +546,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 // waitSafeTxToBeFinalized checks all safe monitored txs and wait the number of
 // l1 blocks configured to finalize the tx
 func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusSafe}
+	statusesFilter := []types.MonitoredTxStatus{types.MonitoredTxStatusSafe}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to get safe monitored txs: %v", err)
@@ -545,7 +575,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 		if mTx.BlockNumber.Uint64() <= finaLizedBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("finalized")
-			mTx.Status = MonitoredTxStatusFinalized
+			mTx.Status = types.MonitoredTxStatusFinalized
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
 				return fmt.Errorf("failed to update safe monitored tx: %v", err)
@@ -561,10 +591,10 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 	var err error
 	logger.Info("processing")
 
-	var signedTx *types.Transaction
+	var signedTx *ethTypes.Transaction
 	if !mTx.confirmed {
 		// review tx and increase gas and gas price if needed
-		if mTx.Status == MonitoredTxStatusSent {
+		if mTx.Status == types.MonitoredTxStatusSent {
 			err := c.reviewMonitoredTxGas(ctx, mTx, logger)
 			if err != nil {
 				logger.Errorf("failed to review monitored tx: %v", err)
@@ -593,7 +623,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			return
 		} else {
 			// update monitored tx changes into storage
-			err = c.storage.Update(ctx, *mTx.monitoredTx)
+			err = c.storage.Update(ctx, *mTx.MonitoredTx)
 			if err != nil {
 				logger.Errorf("failed to update monitored tx: %v", err)
 				return
@@ -612,12 +642,12 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 				return
 			}
 			logger.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
-			if mTx.Status == MonitoredTxStatusCreated {
+			if mTx.Status == types.MonitoredTxStatusCreated {
 				// update tx status to sent
-				mTx.Status = MonitoredTxStatusSent
+				mTx.Status = types.MonitoredTxStatusSent
 				logger.Debugf("status changed to %v", string(mTx.Status))
 				// update monitored tx changes into storage
-				err = c.storage.Update(ctx, *mTx.monitoredTx)
+				err = c.storage.Update(ctx, *mTx.MonitoredTx)
 				if err != nil {
 					logger.Errorf("failed to update monitored tx changes: %v", err)
 					return
@@ -640,7 +670,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			return
 		}
 
-		var txReceipt *types.Receipt
+		var txReceipt *ethTypes.Receipt
 		waitingReceiptTimeout := time.Now().Add(c.cfg.GetReceiptMaxTime.Duration)
 		// get tx receipt
 		for {
@@ -667,8 +697,8 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 	}
 
 	// if mined, check receipt and mark as Failed or Confirmed
-	if mTx.lastReceipt.Status == types.ReceiptStatusSuccessful {
-		mTx.Status = MonitoredTxStatusMined
+	if mTx.lastReceipt.Status == ethTypes.ReceiptStatusSuccessful {
+		mTx.Status = types.MonitoredTxStatusMined
 		mTx.BlockNumber = mTx.lastReceipt.BlockNumber
 		logger.Info("mined")
 	} else {
@@ -678,13 +708,13 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			return
 		}
 		// otherwise we understand this monitored tx has failed
-		mTx.Status = MonitoredTxStatusFailed
+		mTx.Status = types.MonitoredTxStatusFailed
 		mTx.BlockNumber = mTx.lastReceipt.BlockNumber
 		logger.Info("failed")
 	}
 
 	// update monitored tx changes into storage
-	err = c.storage.Update(ctx, *mTx.monitoredTx)
+	err = c.storage.Update(ctx, *mTx.MonitoredTx)
 	if err != nil {
 		logger.Errorf("failed to update monitored tx: %v", err)
 		return
@@ -693,9 +723,9 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 
 // shouldContinueToMonitorThisTx checks the the tx receipt and decides if it should
 // continue or not to monitor the monitored tx related to the tx from this receipt
-func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt *types.Receipt) bool {
+func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt *ethTypes.Receipt) bool {
 	// if the receipt has a is successful result, stop monitoring
-	if receipt.Status == types.ReceiptStatusSuccessful {
+	if receipt.Status == ethTypes.ReceiptStatusSuccessful {
 		return false
 	}
 
@@ -726,10 +756,10 @@ func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt *typ
 // state of the blockchain
 func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIteration, mTxLogger *log.Logger) error {
 	mTxLogger.Debug("reviewing")
+	isBlobTx := mTx.BlobSidecar != nil
 	var (
-		isBlobTx = mTx.BlobSidecar != nil
-		err      error
-		gas      uint64
+		err error
+		gas uint64
 	)
 
 	// get gas price
@@ -815,7 +845,7 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 		mTx.Gas = gas
 	}
 
-	err = c.storage.Update(ctx, *mTx.monitoredTx)
+	err = c.storage.Update(ctx, *mTx.MonitoredTx)
 	if err != nil {
 		return fmt.Errorf("failed to update monitored tx changes: %w", err)
 	}
@@ -825,7 +855,8 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 
 // getMonitoredTxnIteration gets all monitored txs that need to be sent or resent in current monitor iteration
 func (c *Client) getMonitoredTxnIteration(ctx context.Context) ([]*monitoredTxnIteration, error) {
-	txsToUpdate, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent})
+	txsToUpdate, err := c.storage.GetByStatus(ctx,
+		[]types.MonitoredTxStatus{types.MonitoredTxStatusCreated, types.MonitoredTxStatusSent})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get txs to update nonces: %w", err)
 	}
@@ -836,7 +867,7 @@ func (c *Client) getMonitoredTxnIteration(ctx context.Context) ([]*monitoredTxnI
 	for _, tx := range txsToUpdate {
 		tx := tx
 
-		iteration := &monitoredTxnIteration{monitoredTx: &tx}
+		iteration := &monitoredTxnIteration{MonitoredTx: &tx}
 		iterations = append(iterations, iteration)
 
 		updateNonce := iteration.shouldUpdateNonce(ctx, c.etherman)
@@ -899,18 +930,18 @@ func (c *Client) logErrorAndWait(msg string, err error) {
 
 // ResultHandler used by the caller to handle results
 // when processing monitored txs
-type ResultHandler func(MonitoredTxResult)
+type ResultHandler func(types.MonitoredTxResult)
 
 // ProcessPendingMonitoredTxs will check all monitored txs
 // and wait until all of them are either confirmed or failed before continuing
 //
 // for the confirmed and failed ones, the resultHandler will be triggered
 func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler ResultHandler) {
-	statusesFilter := []MonitoredTxStatus{
-		MonitoredTxStatusCreated,
-		MonitoredTxStatusSent,
-		MonitoredTxStatusFailed,
-		MonitoredTxStatusMined,
+	statusesFilter := []types.MonitoredTxStatus{
+		types.MonitoredTxStatusCreated,
+		types.MonitoredTxStatusSent,
+		types.MonitoredTxStatusFailed,
+		types.MonitoredTxStatusMined,
 	}
 	// keep running until there are pending monitored txs
 	for {
@@ -931,7 +962,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 			mTxResultLogger := CreateMonitoredTxResultLogger(result)
 
 			// if the result is confirmed, we set it as done do stop looking into this monitored tx
-			if result.Status == MonitoredTxStatusMined {
+			if result.Status == types.MonitoredTxStatusMined {
 				err := c.setStatusSafe(ctx, result.ID)
 				if err != nil {
 					mTxResultLogger.Errorf("failed to set monitored tx as safe, err: %v", err)
@@ -946,7 +977,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 			}
 
 			// if the result is failed, we need to go around it and rebuild a batch verification
-			if result.Status == MonitoredTxStatusFailed {
+			if result.Status == types.MonitoredTxStatusFailed {
 				resultHandler(result)
 				continue
 			}
@@ -964,7 +995,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 				}
 
 				// if the result status is confirmed or failed, breaks the wait loop
-				if result.Status == MonitoredTxStatusMined || result.Status == MonitoredTxStatusFailed {
+				if result.Status == types.MonitoredTxStatusMined || result.Status == types.MonitoredTxStatusFailed {
 					break
 				}
 
@@ -1006,7 +1037,7 @@ func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 }
 
 // MakeBlobSidecar constructs a blob tx sidecar
-func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
+func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *ethTypes.BlobTxSidecar {
 	commitments := make([]kzg4844.Commitment, 0, len(blobs))
 	proofs := make([]kzg4844.Proof, 0, len(blobs))
 
@@ -1020,7 +1051,7 @@ func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
 		proofs = append(proofs, p)
 	}
 
-	return &types.BlobTxSidecar{
+	return &ethTypes.BlobTxSidecar{
 		Blobs:       blobs,
 		Commitments: commitments,
 		Proofs:      proofs,
@@ -1028,8 +1059,8 @@ func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
 }
 
 // createMonitoredTxLogger creates an instance of logger with all the important
-// fields already set for a monitoredTx
-func createMonitoredTxLogger(mTx monitoredTx) *log.Logger {
+// fields already set for a types.MonitoredTx
+func createMonitoredTxLogger(mTx types.MonitoredTx) *log.Logger {
 	return log.WithFields(
 		"monitoredTxId", mTx.ID,
 		"createdAt", mTx.CreatedAt,
@@ -1039,8 +1070,8 @@ func createMonitoredTxLogger(mTx monitoredTx) *log.Logger {
 }
 
 // CreateLogger creates an instance of logger with all the important
-// fields already set for a monitoredTx without requiring an instance of
-// monitoredTx, this should be use in for callers before calling the ADD
+// fields already set for a types.MonitoredTx without requiring an instance of
+// types.MonitoredTx, this should be use in for callers before calling the ADD
 // method
 func CreateLogger(monitoredTxId common.Hash, from common.Address, to *common.Address) *log.Logger {
 	return log.WithFields(
@@ -1051,8 +1082,8 @@ func CreateLogger(monitoredTxId common.Hash, from common.Address, to *common.Add
 }
 
 // CreateMonitoredTxResultLogger creates an instance of logger with all the important
-// fields already set for a MonitoredTxResult
-func CreateMonitoredTxResultLogger(mTxResult MonitoredTxResult) *log.Logger {
+// fields already set for a types.MonitoredTxResult
+func CreateMonitoredTxResultLogger(mTxResult types.MonitoredTxResult) *log.Logger {
 	return log.WithFields(
 		"monitoredTxId", mTxResult.ID.String(),
 	)

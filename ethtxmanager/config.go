@@ -56,10 +56,10 @@ type Config struct {
 	// max gas price limit: 110
 	// tx gas price = 110
 	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
-	// PersistenceFilename is the filename to store the memory storage
-	PersistenceFilename string `mapstructure:"PersistenceFilename"`
+	// DBPath is the path of the SQL database
+	DBPath string `mapstructure:"DBPath"`
 	// ReadPendingL1Txs is a flag to enable the reading of pending L1 txs
-	// It can only be enabled if PersistenceFilename is empty
+	// It can only be enabled if DBPath is empty
 	ReadPendingL1Txs bool `mapstructure:"ReadPendingL1Txs"`
 	// Etherman configuration
 	Etherman etherman.Config `mapstructure:"Etherman"`

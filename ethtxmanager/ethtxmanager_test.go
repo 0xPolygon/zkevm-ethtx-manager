@@ -3,11 +3,16 @@ package ethtxmanager
 import (
 	context "context"
 	"errors"
+	"math/big"
 	"testing"
+	"time"
 
+	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
+	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/sqlstorage"
 	"github.com/0xPolygon/zkevm-ethtx-manager/mocks"
+	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	common "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +20,8 @@ import (
 func TestGetMonitoredTxnIteration(t *testing.T) {
 	ctx := context.Background()
 	etherman := mocks.NewEthermanInterface(t)
-	storage := NewMemStorage("")
+	storage, err := sqlstorage.NewStorage(localCommon.SQLLiteDriverName, ":memory:")
+	require.NoError(t, err)
 
 	client := &Client{
 		etherman: etherman,
@@ -24,7 +30,7 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		storageTxn     *monitoredTx
+		storageTxn     *types.MonitoredTx
 		ethermanNonce  uint64
 		shouldUpdate   bool
 		expectedResult []*monitoredTxnIteration
@@ -37,10 +43,11 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 		},
 		{
 			name: "Transaction should not update nonce",
-			storageTxn: &monitoredTx{
-				ID:     common.HexToHash("0x1"),
-				From:   common.HexToAddress("0x1"),
-				Status: MonitoredTxStatusSent,
+			storageTxn: &types.MonitoredTx{
+				ID:          common.HexToHash("0x1"),
+				From:        common.HexToAddress("0x1"),
+				BlockNumber: big.NewInt(10),
+				Status:      types.MonitoredTxStatusSent,
 				History: map[common.Hash]bool{
 					common.HexToHash("0x1"): true,
 				},
@@ -48,36 +55,39 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 			shouldUpdate: false,
 			expectedResult: []*monitoredTxnIteration{
 				{
-					monitoredTx: &monitoredTx{
-						ID:     common.HexToHash("0x1"),
-						From:   common.HexToAddress("0x1"),
-						Status: MonitoredTxStatusSent,
+					MonitoredTx: &types.MonitoredTx{
+						ID:          common.HexToHash("0x1"),
+						From:        common.HexToAddress("0x1"),
+						BlockNumber: big.NewInt(10),
+						Status:      types.MonitoredTxStatusSent,
 						History: map[common.Hash]bool{
 							common.HexToHash("0x1"): true,
 						},
 					},
 					confirmed:   true,
-					lastReceipt: &types.Receipt{Status: types.ReceiptStatusSuccessful},
+					lastReceipt: &ethtypes.Receipt{Status: ethtypes.ReceiptStatusSuccessful},
 				},
 			},
 			expectedError: nil,
 		},
 		{
 			name: "Transaction should update nonce",
-			storageTxn: &monitoredTx{
-				ID:     common.HexToHash("0x1"),
-				From:   common.HexToAddress("0x1"),
-				Status: MonitoredTxStatusCreated,
+			storageTxn: &types.MonitoredTx{
+				ID:          common.HexToHash("0x1"),
+				From:        common.HexToAddress("0x1"),
+				Status:      types.MonitoredTxStatusCreated,
+				BlockNumber: big.NewInt(10),
 			},
 			shouldUpdate:  true,
 			ethermanNonce: 1,
 			expectedResult: []*monitoredTxnIteration{
 				{
-					monitoredTx: &monitoredTx{
-						ID:     common.HexToHash("0x1"),
-						From:   common.HexToAddress("0x1"),
-						Status: MonitoredTxStatusCreated,
-						Nonce:  1,
+					MonitoredTx: &types.MonitoredTx{
+						ID:          common.HexToHash("0x1"),
+						From:        common.HexToAddress("0x1"),
+						Status:      types.MonitoredTxStatusCreated,
+						Nonce:       1,
+						BlockNumber: big.NewInt(10),
 					},
 				},
 			},
@@ -85,10 +95,11 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 		},
 		{
 			name: "Error getting pending nonce",
-			storageTxn: &monitoredTx{
-				ID:     common.HexToHash("0x1"),
-				From:   common.HexToAddress("0x1"),
-				Status: MonitoredTxStatusCreated,
+			storageTxn: &types.MonitoredTx{
+				ID:          common.HexToHash("0x1"),
+				From:        common.HexToAddress("0x1"),
+				Status:      types.MonitoredTxStatusCreated,
+				BlockNumber: big.NewInt(10),
 			},
 			shouldUpdate:  true,
 			expectedError: errors.New("failed to get pending nonce for sender: 0x1. Error: some error"),
@@ -97,9 +108,9 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage.Transactions = make(map[common.Hash]monitoredTx, 1)
+			require.NoError(t, storage.Empty(ctx))
 			if tt.storageTxn != nil {
-				storage.Transactions[tt.storageTxn.ID] = *tt.storageTxn
+				require.NoError(t, storage.Add(ctx, *tt.storageTxn))
 			}
 
 			etherman.ExpectedCalls = nil
@@ -116,18 +127,35 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 				require.ErrorContains(t, err, tt.expectedError.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedResult, result)
+				if len(tt.expectedResult) > 0 {
+					require.Len(t, result, len(tt.expectedResult))
+					compareTxsWithoutDates(t, *tt.expectedResult[0].MonitoredTx, *result[0].MonitoredTx)
+				} else {
+					require.Empty(t, result)
+				}
 
 				// now check from storage
 				if len(tt.expectedResult) > 0 {
-					dbTxns, err := storage.GetByStatus(ctx, []MonitoredTxStatus{tt.storageTxn.Status})
+					dbTxns, err := storage.GetByStatus(ctx, []types.MonitoredTxStatus{tt.storageTxn.Status})
 					require.NoError(t, err)
 					require.Len(t, dbTxns, 1)
-					require.Equal(t, tt.expectedResult[0].monitoredTx.Nonce, dbTxns[0].Nonce)
+					require.Equal(t, tt.expectedResult[0].MonitoredTx.Nonce, dbTxns[0].Nonce)
 				}
 			}
 
 			etherman.AssertExpectations(t)
 		})
 	}
+}
+
+// compareTxsWithout dates compares the two MonitoredTx instances, but without dates, since some functions are altering it
+func compareTxsWithoutDates(t *testing.T, expected, actual types.MonitoredTx) {
+	t.Helper()
+
+	expected.CreatedAt = time.Time{}
+	expected.UpdatedAt = time.Time{}
+	actual.CreatedAt = time.Time{}
+	actual.UpdatedAt = time.Time{}
+
+	require.Equal(t, expected, actual)
 }
