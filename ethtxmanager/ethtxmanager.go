@@ -84,7 +84,7 @@ func New(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
-	storage, err := createStorage(cfg.DBPath)
+	storage, err := createStorage(cfg.StoragePath)
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +427,7 @@ func (c *Client) buildResult(ctx context.Context, mTx types.MonitoredTx) (types.
 // get mined
 func (c *Client) Start() {
 	// If no persistence file is uses check L1 for pending txs
-	if c.cfg.DBPath == "" && c.cfg.ReadPendingL1Txs {
+	if c.cfg.StoragePath == "" && c.cfg.ReadPendingL1Txs {
 		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.from, c.cfg.Etherman.HTTPHeaders)
 		if err != nil {
 			log.Errorf("failed to get pending txs from L1: %v", err)
