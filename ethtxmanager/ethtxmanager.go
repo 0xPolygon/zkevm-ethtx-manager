@@ -994,7 +994,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 					continue
 				}
 
-				// if the result status is confirmed or failed, breaks the wait loop
+				// if the result status is mined, safe, finalized or failed, breaks the wait loop
 				if result.Status == types.MonitoredTxStatusMined ||
 					result.Status == types.MonitoredTxStatusSafe ||
 					result.Status == types.MonitoredTxStatusFinalized ||
