@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/md5"
+	"crypto/md5" //nolint:all
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -76,9 +76,11 @@ func (c *Client) genAuth(ctx context.Context, req *http.Request, algorithm strin
 	return c.generateSignature(ctx, treeMap, body.String(), algorithm)
 }
 
-func (c *Client) generateSignature(ctx context.Context, treeMap map[string][]string, body, algorithm string) (string, error) {
+func (c *Client) generateSignature(
+	ctx context.Context, treeMap map[string][]string, body, algorithm string,
+) (string, error) {
 	// Sort the map by values
-	var keys []string
+	keys := make([]string, 0, len(treeMap))
 	for key := range treeMap {
 		keys = append(keys, key)
 	}
@@ -127,7 +129,7 @@ func (bw *bufferWriter) Write(p []byte) (n int, err error) {
 }
 
 func signByMd5(content string) []byte {
-	hash := md5.New() // golint:ignore
+	hash := md5.New() //nolint:all
 	hash.Write([]byte(content))
 	return []byte(hex.EncodeToString(hash.Sum(nil)))
 }
@@ -147,7 +149,13 @@ func encryptAES(src, key string) (string, error) {
 	content := []byte(src)
 	content = PKCS5Padding(content, block.BlockSize())
 	des := make([]byte, len(content))
-	err = ecbEncrypt.(*ecbEncrypter).cryptBlocksWithError(des, content)
+
+	encrypt, ok := ecbEncrypt.(*ecbEncrypter)
+	if !ok {
+		return "", fmt.Errorf("failed to cast ecbEncrypt.")
+	}
+
+	err = encrypt.cryptBlocksWithError(des, content)
 	if err != nil {
 		return "", fmt.Errorf("failed to encrypt AES: %v", err)
 	}

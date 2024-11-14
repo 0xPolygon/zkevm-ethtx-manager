@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -70,7 +70,12 @@ type ethClienter interface {
 }
 
 // WaitTxToBeMined waits until a tx has been mined or the given timeout expires.
-func WaitTxToBeMined(parentCtx context.Context, client ethClienter, tx *types.Transaction, timeout time.Duration) error {
+func WaitTxToBeMined(
+	parentCtx context.Context,
+	client ethClienter,
+	tx *types.Transaction,
+	timeout time.Duration,
+) error {
 	ctx, cancel := context.WithTimeout(parentCtx, timeout)
 	defer cancel()
 	receipt, err := bind.WaitMined(ctx, client, tx)
@@ -129,7 +134,12 @@ func RevertReason(ctx context.Context, c ethClienter, tx *types.Transaction, blo
 }
 
 // WaitTxReceipt waits until a tx receipt is available or the given timeout expires.
-func WaitTxReceipt(ctx context.Context, txHash common.Hash, timeout time.Duration, client *ethclient.Client) (*types.Receipt, error) {
+func WaitTxReceipt(
+	ctx context.Context,
+	txHash common.Hash,
+	timeout time.Duration,
+	client *ethclient.Client,
+) (*types.Receipt, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client is nil")
 	}

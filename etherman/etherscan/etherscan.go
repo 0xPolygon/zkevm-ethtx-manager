@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/encoding"
+	"github.com/0xPolygon/zkevm-ethtx-manager/common"
 )
 
 type etherscanResponse struct {
@@ -29,7 +29,8 @@ type gasPriceEtherscan struct {
 type Config struct {
 	// Need API key to use etherscan, if it's empty etherscan is not used
 	ApiKey string `mapstructure:"ApiKey"`
-	// URL of the etherscan API. Overwritten with a hardcoded URL: "https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey="
+	// URL of the etherscan API. Overwritten with a hardcoded URL:
+	// "https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey="
 	Url string
 }
 
@@ -72,6 +73,6 @@ func (e *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	if err != nil {
 		return big.NewInt(0), fmt.Errorf("Reading body failed: %w", err)
 	}
-	fgp, _ := big.NewInt(0).SetString(resBody.Result.FastGasPrice, encoding.Base10)
-	return new(big.Int).Mul(fgp, big.NewInt(encoding.Gwei)), nil
+	fgp, _ := big.NewInt(0).SetString(resBody.Result.FastGasPrice, common.Base10)
+	return new(big.Int).Mul(fgp, big.NewInt(common.Gwei)), nil
 }

@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/encoding"
+	"github.com/0xPolygon/zkevm-ethtx-manager/common"
 )
 
 type ethGasStationResponse struct {
@@ -57,8 +57,8 @@ func (e *Client) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	// Unmarshal result
 	err = json.Unmarshal(body, &resBody)
 	if err != nil {
-		return big.NewInt(0), fmt.Errorf("Reading body failed: %w", err)
+		return big.NewInt(0), fmt.Errorf("reading body failed: %w", err)
 	}
 	fgp := big.NewInt(0).SetUint64(resBody.GasPrice.Instant)
-	return new(big.Int).Mul(fgp, big.NewInt(encoding.Gwei)), nil
+	return new(big.Int).Mul(fgp, big.NewInt(common.Gwei)), nil
 }

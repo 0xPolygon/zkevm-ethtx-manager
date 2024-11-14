@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/ethgasstation"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/etherscan"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/ethgasstation"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -103,7 +103,11 @@ func (etherMan *Client) GetLatestBlockNumber(ctx context.Context) (uint64, error
 }
 
 // WaitTxToBeMined waits for an L1 tx to be mined. It will return error if the tx is reverted or timeout is exceeded
-func (etherMan *Client) WaitTxToBeMined(ctx context.Context, tx *types.Transaction, timeout time.Duration) (bool, error) {
+func (etherMan *Client) WaitTxToBeMined(
+	ctx context.Context,
+	tx *types.Transaction,
+	timeout time.Duration,
+) (bool, error) {
 	err := WaitTxToBeMined(ctx, etherMan.EthClient, tx, timeout)
 	if errors.Is(err, context.DeadlineExceeded) {
 		return false, nil
@@ -155,7 +159,13 @@ func (etherMan *Client) SuggestedGasPrice(ctx context.Context) (*big.Int, error)
 }
 
 // EstimateGas returns the estimated gas for the tx
-func (etherMan *Client) EstimateGas(ctx context.Context, from common.Address, to *common.Address, value *big.Int, data []byte) (uint64, error) {
+func (etherMan *Client) EstimateGas(
+	ctx context.Context,
+	from common.Address,
+	to *common.Address,
+	value *big.Int,
+	data []byte,
+) (uint64, error) {
 	return etherMan.EthClient.EstimateGas(ctx, ethereum.CallMsg{
 		From:  from,
 		To:    to,
@@ -165,7 +175,15 @@ func (etherMan *Client) EstimateGas(ctx context.Context, from common.Address, to
 }
 
 // EstimateGasBlobTx returns the estimated gas for the blob tx
-func (etherMan *Client) EstimateGasBlobTx(ctx context.Context, from common.Address, to *common.Address, gasFeeCap *big.Int, gasTipCap *big.Int, value *big.Int, data []byte) (uint64, error) {
+func (etherMan *Client) EstimateGasBlobTx(
+	ctx context.Context,
+	from common.Address,
+	to *common.Address,
+	gasFeeCap *big.Int,
+	gasTipCap *big.Int,
+	value *big.Int,
+	data []byte,
+) (uint64, error) {
 	return etherMan.EthClient.EstimateGas(ctx, ethereum.CallMsg{
 		From:      from,
 		To:        to,
@@ -189,7 +207,11 @@ func (etherMan *Client) CheckTxWasMined(ctx context.Context, txHash common.Hash)
 }
 
 // SignTx tries to sign a transaction accordingly to the provided sender
-func (etherMan *Client) SignTx(ctx context.Context, sender common.Address, tx *types.Transaction) (*types.Transaction, error) {
+func (etherMan *Client) SignTx(
+	ctx context.Context,
+	sender common.Address,
+	tx *types.Transaction,
+) (*types.Transaction, error) {
 	auth, err := etherMan.getAuthByAddress(sender)
 	if err == ErrNotFound {
 		return nil, ErrPrivateKeyNotFound
@@ -293,13 +315,14 @@ func (etherMan *Client) getBlockNumber(ctx context.Context, blockNumber rpc.Bloc
 	return header.Number.Uint64(), nil
 }
 
-// GetHeaderByNumber returns a block header from the current canonical chain, if number is nil the latest header is returned
+// GetHeaderByNumber returns a block header from the current canonical chain.
+// If number is nil the latest header is returned
 func (etherMan *Client) GetHeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	header, err := etherMan.EthClient.HeaderByNumber(ctx, number)
 	return header, err
 }
 
-// GetSuggestGasTipCap retrieves the currently suggested gas tip cap after 1559 to allow a timely execution of a transaction
+// GetSuggestGasTipCap retrieves the currently suggested gas tip cap after EIP-1559 for timely transaction execution.
 func (etherMan *Client) GetSuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	gasTipCap, err := etherMan.EthClient.SuggestGasTipCap(ctx)
 	return gasTipCap, err

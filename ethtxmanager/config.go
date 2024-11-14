@@ -1,19 +1,22 @@
 package ethtxmanager
 
 import (
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/config/types"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 )
 
 // Config is configuration for ethereum transaction manager
 type Config struct {
 	// FrequencyToMonitorTxs frequency of the resending failed txs
 	FrequencyToMonitorTxs types.Duration `mapstructure:"FrequencyToMonitorTxs"`
+
 	// WaitTxToBeMined time to wait after transaction was sent to the ethereum
 	WaitTxToBeMined types.Duration `mapstructure:"WaitTxToBeMined"`
+
 	// GetReceiptMaxTime is the max time to wait to get the receipt of the mined transaction
 	GetReceiptMaxTime types.Duration `mapstructure:"WaitReceiptMaxTime"`
+
 	// GetReceiptWaitInterval is the time to sleep before trying to get the receipt of the mined transaction
 	GetReceiptWaitInterval types.Duration `mapstructure:"WaitReceiptCheckInterval"`
 
@@ -56,11 +59,14 @@ type Config struct {
 	// max gas price limit: 110
 	// tx gas price = 110
 	MaxGasPriceLimit uint64 `mapstructure:"MaxGasPriceLimit"`
-	// PersistenceFilename is the filename to store the memory storage
-	PersistenceFilename string `mapstructure:"PersistenceFilename"`
+
+	// StoragePath is the path of the internal storage
+	StoragePath string `mapstructure:"StoragePath"`
+
 	// ReadPendingL1Txs is a flag to enable the reading of pending L1 txs
-	// It can only be enabled if PersistenceFilename is empty
+	// It can only be enabled if DBPath is empty
 	ReadPendingL1Txs bool `mapstructure:"ReadPendingL1Txs"`
+
 	// Etherman configuration
 	Etherman etherman.Config `mapstructure:"Etherman"`
 

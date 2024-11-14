@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/polygonrollupmanager_xlayer"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/smartcontracts/polygonvalidium_xlayer"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
-
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/smartcontracts/polygonrollupmanager_xlayer"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/smartcontracts/polygonvalidium_xlayer"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
+	zkmanTypes "github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -36,7 +36,12 @@ func getTraceID(ctx context.Context) (string, string) {
 	if ctx == nil || ctx.Value(traceID) == nil {
 		return "", ""
 	}
-	return string(traceID), ctx.Value(traceID).(string)
+	strVal, ok := ctx.Value(traceID).(string)
+	if !ok {
+		log.Warnf("Failed to traceID %s to string.", traceID)
+		return string(traceID), ""
+	}
+	return string(traceID), strVal
 }
 
 func (key contextKey) String() string {
@@ -70,7 +75,7 @@ var (
 	errUnpack                    = errors.New("failed to unpack data")
 )
 
-func (c *Client) signTx(mTx monitoredTx, tx *types.Transaction) (*types.Transaction, error) {
+func (c *Client) signTx(mTx zkmanTypes.MonitoredTx, tx *types.Transaction) (*types.Transaction, error) {
 	if c == nil || !c.cfg.CustodialAssets.Enable {
 		return nil, errCustodialAssetsNotEnabled
 	}
@@ -96,7 +101,9 @@ func (c *Client) signTx(mTx monitoredTx, tx *types.Transaction) (*types.Transact
 			mLog.Errorf("failed to marshal tx %x data: %v", tx.Hash(), err)
 			return nil, fmt.Errorf("failed to marshal tx %x data: %v", tx.Hash(), err)
 		}
-		ret, err = c.postSignRequestAndWaitResult(ctx, mTx, c.newSignRequest(c.cfg.CustodialAssets.OperateTypeSeq, sender, infos))
+		ret, err = c.postSignRequestAndWaitResult(
+			ctx, mTx, c.newSignRequest(c.cfg.CustodialAssets.OperateTypeSeq, sender, infos),
+		)
 		if err != nil {
 			mLog.Errorf("failed to post custodial assets: %v", err)
 			return nil, fmt.Errorf("failed to post custodial assets: %v", err)
@@ -112,7 +119,9 @@ func (c *Client) signTx(mTx monitoredTx, tx *types.Transaction) (*types.Transact
 			mLog.Errorf("failed to marshal tx %x data: %v", tx.Hash(), err)
 			return nil, fmt.Errorf("failed to marshal tx %x data: %v", tx.Hash(), err)
 		}
-		ret, err = c.postSignRequestAndWaitResult(ctx, mTx, c.newSignRequest(c.cfg.CustodialAssets.OperateTypeAgg, sender, infos))
+		ret, err = c.postSignRequestAndWaitResult(
+			ctx, mTx, c.newSignRequest(c.cfg.CustodialAssets.OperateTypeAgg, sender, infos),
+		)
 		if err != nil {
 			mLog.Errorf("failed to post custodial assets: %v", err)
 			return nil, fmt.Errorf("failed to post custodial assets: %v", err)
@@ -146,7 +155,9 @@ func (c *Client) unpackSequenceBatchesTx(tx *types.Transaction) (*sequenceBatche
 	return &args, nil
 }
 
-func (c *Client) unpackVerifyBatchesTrustedAggregatorTx(tx *types.Transaction) (*verifyBatchesTrustedAggregatorArgs, error) {
+func (c *Client) unpackVerifyBatchesTrustedAggregatorTx(
+	tx *types.Transaction,
+) (*verifyBatchesTrustedAggregatorArgs, error) {
 	if tx == nil || len(tx.Data()) < sigLen {
 		return nil, errEmptyTx
 	}
@@ -211,7 +222,7 @@ func getGasPriceEther(gasPriceWei *big.Int) string {
 	return fmt.Sprintf("%v.%018s", compactAmount.String(), reminder.String())
 }
 
-func (s *sequenceBatchesArgs) marshal(contractAddress common.Address, mTx monitoredTx) (string, error) {
+func (s *sequenceBatchesArgs) marshal(contractAddress common.Address, mTx zkmanTypes.MonitoredTx) (string, error) {
 	if s == nil {
 		return "", fmt.Errorf("sequenceBatchesArgs is nil")
 	}
@@ -254,7 +265,9 @@ func (s *sequenceBatchesArgs) marshal(contractAddress common.Address, mTx monito
 	return string(ret), nil
 }
 
-func (v *verifyBatchesTrustedAggregatorArgs) marshal(contractAddress common.Address, mTx monitoredTx) (string, error) {
+func (v *verifyBatchesTrustedAggregatorArgs) marshal(
+	contractAddress common.Address, mTx zkmanTypes.MonitoredTx,
+) (string, error) {
 	if v == nil {
 		return "", fmt.Errorf("verifyBatchesTrustedAggregatorArgs is nil")
 	}

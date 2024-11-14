@@ -1,0 +1,10 @@
+with-expecter: true
+dir: "mocks"
+filename: "{{.InterfaceName | lower }}.generated.go"
+mockname: "{{.InterfaceName}}"
+outpkg: "mocks"
+packages:
+  github.com/0xPolygon/zkevm-ethtx-manager/types:
+    interfaces:
+      EthermanInterface:
+        config:

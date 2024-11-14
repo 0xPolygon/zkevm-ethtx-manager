@@ -13,13 +13,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/log"
+	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
+	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/sqlstorage"
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
+	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer/l1_check_block"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core/types"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -45,8 +48,8 @@ type Client struct {
 	cancel context.CancelFunc
 
 	cfg      Config
-	etherman ethermanInterface
-	storage  storageInterface
+	etherman types.EthermanInterface
+	storage  types.StorageInterface
 	from     common.Address
 }
 
@@ -65,34 +68,32 @@ type l1Tx struct {
 }
 
 // New creates new eth tx manager
-func New(cfg Config, from common.Address) (*Client, error) {
+func New(cfg Config) (*Client, error) {
 	etherman, err := etherman.NewClient(cfg.Etherman)
 	if err != nil {
 		return nil, err
 	}
 
-	//  For X Layer custodial signature
-	if !cfg.CustodialAssets.Enable {
-		auth, err := etherman.LoadAuthFromKeyStore(cfg.PrivateKeys[0].Path, cfg.PrivateKeys[0].Password)
-		if err != nil {
-			return nil, err
-		}
+	auth, err := etherman.LoadAuthFromKeyStore(cfg.PrivateKeys[0].Path, cfg.PrivateKeys[0].Password)
+	if err != nil {
+		return nil, err
+	}
 
-		err = etherman.AddOrReplaceAuth(*auth)
-		if err != nil {
-			return nil, err
-		}
+	err = etherman.AddOrReplaceAuth(*auth)
+	if err != nil {
+		return nil, err
+	}
 
-		if auth.From != from {
-			return nil, fmt.Errorf(fmt.Sprintf("private key does not match the from address, %v,%v", auth.From, from))
-		}
+	storage, err := createStorage(cfg.StoragePath)
+	if err != nil {
+		return nil, err
 	}
 
 	client := Client{
 		cfg:      cfg,
 		etherman: etherman,
-		storage:  NewMemStorage(cfg.PersistenceFilename),
-		from:     from,
+		storage:  storage,
+		from:     auth.From,
 	}
 
 	log.Init(cfg.Log)
@@ -100,7 +101,18 @@ func New(cfg Config, from common.Address) (*Client, error) {
 	return &client, nil
 }
 
-func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string) ([]monitoredTx, error) {
+// createStorage instantiates either SQL storage or in memory storage.
+// In case dbPath parameter is a non-empty string, it creates SQL storage, otherwise in memory one.
+func createStorage(dbPath string) (types.StorageInterface, error) {
+	if dbPath == "" {
+		// if the provided path is empty, use the in memory sql lite storage
+		dbPath = ":memory:"
+	}
+
+	return sqlstorage.NewStorage(localCommon.SQLLiteDriverName, dbPath)
+}
+
+func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string) ([]types.MonitoredTx, error) {
 	response, err := JSONRPCCall(URL, "txpool_content", httpHeaders)
 	if err != nil {
 		return nil, err
@@ -112,7 +124,7 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 		return nil, err
 	}
 
-	var mTxs []monitoredTx
+	mTxs := make([]types.MonitoredTx, 0, len(L1Txs.Pending[from]))
 	for _, tx := range L1Txs.Pending[from] {
 		if common.HexToAddress(tx.From) == from {
 			to := common.HexToAddress(tx.To)
@@ -140,8 +152,8 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 
 			// TODO: handle case of blob transaction
 
-			mTx := monitoredTx{
-				ID:       types.NewTx(&types.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
+			mTx := types.MonitoredTx{
+				ID:       ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: nonce.Uint64(), Value: value, Data: data}).Hash(),
 				From:     common.HexToAddress(tx.From),
 				To:       &to,
 				Nonce:    nonce.Uint64(),
@@ -149,7 +161,7 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 				Data:     data,
 				Gas:      gas.Uint64(),
 				GasPrice: gasPrice,
-				Status:   MonitoredTxStatusSent,
+				Status:   types.MonitoredTxStatusSent,
 				History:  make(map[common.Hash]bool),
 			}
 			mTxs = append(mTxs, mTx)
@@ -159,50 +171,28 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 	return mTxs, nil
 }
 
-// getTxNonce get the nonce for the given account
-func (c *Client) getTxNonce(ctx context.Context, from common.Address) (uint64, error) {
-	// Get created transactions from the database for the given account
-	createdTxs, err := c.storage.GetByStatus(ctx, []MonitoredTxStatus{MonitoredTxStatusCreated})
-	if err != nil {
-		return 0, fmt.Errorf("failed to get created monitored txs: %w", err)
-	}
-
-	var nonce uint64
-	if len(createdTxs) > 0 {
-		// if there are pending txs, we adjust the nonce accordingly
-		for _, createdTx := range createdTxs {
-			if createdTx.Nonce > nonce {
-				nonce = createdTx.Nonce
-			}
-		}
-
-		nonce++
-	} else {
-		// if there are no pending txs, we get the pending nonce from the etherman
-		if nonce, err = c.etherman.PendingNonce(ctx, from); err != nil {
-			return 0, fmt.Errorf("failed to get pending nonce: %w", err)
-		}
-	}
-
-	return nonce, nil
+// Add a transaction to be sent and monitored
+func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int,
+	data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar) (common.Hash, error) {
+	return c.add(ctx, to, value, data, gasOffset, sidecar, 0)
 }
 
-// Add a transaction to be sent and monitored
-func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint64, value *big.Int, data []byte, gasOffset uint64, sidecar *types.BlobTxSidecar) (common.Hash, error) {
-	var nonce uint64
-	var err error
+// AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
+func (c *Client) AddWithGas(ctx context.Context, to *common.Address,
+	value *big.Int, data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar, gas uint64) (common.Hash, error) {
+	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
+}
 
-	if forcedNonce == nil {
-		// get next nonce
-		nonce, err = c.getTxNonce(ctx, c.from)
-		if err != nil {
-			err := fmt.Errorf("failed to get current nonce: %w", err)
-			log.Errorf(err.Error())
-			return common.Hash{}, err
-		}
-	} else {
-		nonce = *forcedNonce
-	}
+func (c *Client) add(
+	ctx context.Context,
+	to *common.Address,
+	value *big.Int,
+	data []byte,
+	gasOffset uint64,
+	sidecar *ethTypes.BlobTxSidecar,
+	gas uint64,
+) (common.Hash, error) {
+	var err error
 
 	// get gas price
 	gasPrice, err := c.suggestedGasPrice(ctx)
@@ -212,9 +202,15 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		return common.Hash{}, err
 	}
 
-	var gas uint64
-	var blobFeeCap *big.Int
-	var gasTipCap *big.Int
+	var (
+		blobFeeCap  *big.Int
+		gasTipCap   *big.Int
+		estimateGas bool
+	)
+
+	if gas == 0 {
+		estimateGas = true
+	}
 
 	if sidecar != nil {
 		// blob gas price estimation
@@ -239,15 +235,22 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		}
 
 		// get gas
-		gas, err = c.etherman.EstimateGasBlobTx(ctx, c.from, to, gasPrice, gasTipCap, value, data)
-		if err != nil {
-			if de, ok := err.(rpc.DataError); ok {
-				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+		if estimateGas {
+			gas, err = c.etherman.EstimateGasBlobTx(ctx, c.from, to, gasPrice, gasTipCap, value, data)
+			if err != nil {
+				if de, ok := err.(rpc.DataError); ok {
+					err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+				}
+				err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
+				log.Error(err.Error())
+				log.Debugf(
+					"failed to estimate gas for blob tx: from: %v, to: %v, value: %v",
+					c.from.String(),
+					to.String(),
+					value.String(),
+				)
+				return common.Hash{}, err
 			}
-			err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
-			log.Error(err.Error())
-			log.Debugf("failed to estimate gas for blob tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
-			return common.Hash{}, err
 		}
 
 		// margin
@@ -255,8 +258,8 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		gasTipCap = gasTipCap.Mul(gasTipCap, big.NewInt(multiplier))
 		gasPrice = gasPrice.Mul(gasPrice, big.NewInt(multiplier))
 		blobFeeCap = blobFeeCap.Mul(blobFeeCap, big.NewInt(multiplier))
-		gas = gas * 12 / 10 //nolint:gomnd
-	} else {
+		gas = gas * 12 / 10 //nolint:mnd
+	} else if estimateGas {
 		// get gas
 		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
 		if err != nil {
@@ -265,7 +268,12 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 			}
 			err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
 			log.Error(err.Error())
-			log.Debugf("failed to estimate gas for tx: from: %v, to: %v, value: %v", c.from.String(), to.String(), value.String())
+			log.Debugf(
+				"failed to estimate gas for tx: from: %v, to: %v, value: %v",
+				c.from.String(),
+				to.String(),
+				value.String(),
+			)
 			if c.cfg.ForcedGas > 0 {
 				gas = c.cfg.ForcedGas
 			} else {
@@ -275,18 +283,16 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	}
 
 	// Calculate id
-	var tx *types.Transaction
+	var tx *ethTypes.Transaction
 	if sidecar == nil {
-		tx = types.NewTx(&types.LegacyTx{
+		tx = ethTypes.NewTx(&ethTypes.LegacyTx{
 			To:    to,
-			Nonce: nonce,
 			Value: value,
 			Data:  data,
 		})
 	} else {
-		tx = types.NewTx(&types.BlobTx{
+		tx = ethTypes.NewTx(&ethTypes.BlobTx{
 			To:         *to,
-			Nonce:      nonce,
 			Value:      uint256.MustFromBig(value),
 			Data:       data,
 			BlobHashes: sidecar.BlobHashes(),
@@ -297,15 +303,16 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 	id := tx.Hash()
 
 	// create monitored tx
-	mTx := monitoredTx{
+	mTx := types.MonitoredTx{
 		ID: id, From: c.from, To: to,
-		Nonce: nonce, Value: value, Data: data,
+		Value: value, Data: data,
 		Gas: gas, GasPrice: gasPrice, GasOffset: gasOffset,
 		BlobSidecar:  sidecar,
 		BlobGas:      tx.BlobGas(),
 		BlobGasPrice: blobFeeCap, GasTipCap: gasTipCap,
-		Status:  MonitoredTxStatusCreated,
-		History: make(map[common.Hash]bool),
+		Status:      types.MonitoredTxStatusCreated,
+		History:     make(map[common.Hash]bool),
+		EstimateGas: estimateGas,
 	}
 
 	// add to storage
@@ -316,7 +323,7 @@ func (c *Client) Add(ctx context.Context, to *common.Address, forcedNonce *uint6
 		return common.Hash{}, err
 	}
 
-	mTxLog := log.WithFields("monitoredTx", mTx.ID, "createdAt", mTx.CreatedAt)
+	mTxLog := log.WithFields("types.MonitoredTx", mTx.ID, "createdAt", mTx.CreatedAt)
 	mTxLog.Infof("created")
 
 	return id, nil
@@ -334,13 +341,14 @@ func (c *Client) RemoveAll(ctx context.Context) error {
 
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
 // if the statuses are empty, all the statuses are considered.
-func (c *Client) ResultsByStatus(ctx context.Context, statuses []MonitoredTxStatus) ([]MonitoredTxResult, error) {
+func (c *Client) ResultsByStatus(ctx context.Context,
+	statuses []types.MonitoredTxStatus) ([]types.MonitoredTxResult, error) {
 	mTxs, err := c.storage.GetByStatus(ctx, statuses)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]MonitoredTxResult, 0, len(mTxs))
+	results := make([]types.MonitoredTxResult, 0, len(mTxs))
 
 	for _, mTx := range mTxs {
 		result, err := c.buildResult(ctx, mTx)
@@ -354,53 +362,53 @@ func (c *Client) ResultsByStatus(ctx context.Context, statuses []MonitoredTxStat
 }
 
 // Result returns the current result of the transaction execution with all the details
-func (c *Client) Result(ctx context.Context, id common.Hash) (MonitoredTxResult, error) {
+func (c *Client) Result(ctx context.Context, id common.Hash) (types.MonitoredTxResult, error) {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
-		return MonitoredTxResult{}, err
+		return types.MonitoredTxResult{}, err
 	}
 
 	return c.buildResult(ctx, mTx)
 }
 
-// setStatusSafe sets the status of a monitored tx to MonitoredTxStatusSafe.
+// setStatusSafe sets the status of a monitored tx to types.MonitoredTxStatusSafe.
 func (c *Client) setStatusSafe(ctx context.Context, id common.Hash) error {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	mTx.Status = MonitoredTxStatusSafe
+	mTx.Status = types.MonitoredTxStatusSafe
 	return c.storage.Update(ctx, mTx)
 }
 
-func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxResult, error) {
-	history := mTx.historyHashSlice()
-	txs := make(map[common.Hash]TxResult, len(history))
+func (c *Client) buildResult(ctx context.Context, mTx types.MonitoredTx) (types.MonitoredTxResult, error) {
+	history := mTx.HistoryHashSlice()
+	txs := make(map[common.Hash]types.TxResult, len(history))
 
 	for _, txHash := range history {
 		tx, _, err := c.etherman.GetTx(ctx, txHash)
 		if !errors.Is(err, ethereum.NotFound) && err != nil {
-			return MonitoredTxResult{}, err
+			return types.MonitoredTxResult{}, err
 		}
 
 		receipt, err := c.etherman.GetTxReceipt(ctx, txHash)
 		if !errors.Is(err, ethereum.NotFound) && err != nil {
-			return MonitoredTxResult{}, err
+			return types.MonitoredTxResult{}, err
 		}
 
 		revertMessage, err := c.etherman.GetRevertMessage(ctx, tx)
 		if !errors.Is(err, ethereum.NotFound) && err != nil && err.Error() != ErrExecutionReverted.Error() {
-			return MonitoredTxResult{}, err
+			return types.MonitoredTxResult{}, err
 		}
 
-		txs[txHash] = TxResult{
+		txs[txHash] = types.TxResult{
 			Tx:            tx,
 			Receipt:       receipt,
 			RevertMessage: revertMessage,
 		}
 	}
 
-	result := MonitoredTxResult{
+	result := types.MonitoredTxResult{
 		ID:                 mTx.ID,
 		To:                 mTx.To,
 		Nonce:              mTx.Nonce,
@@ -419,7 +427,7 @@ func (c *Client) buildResult(ctx context.Context, mTx monitoredTx) (MonitoredTxR
 // get mined
 func (c *Client) Start() {
 	// If no persistence file is uses check L1 for pending txs
-	if c.cfg.PersistenceFilename == "" && c.cfg.ReadPendingL1Txs {
+	if c.cfg.StoragePath == "" && c.cfg.ReadPendingL1Txs {
 		pendingTxs, err := pendingL1Txs(c.cfg.Etherman.URL, c.from, c.cfg.Etherman.HTTPHeaders)
 		if err != nil {
 			log.Errorf("failed to get pending txs from L1: %v", err)
@@ -466,26 +474,25 @@ func (c *Client) Stop() {
 
 // monitorTxs processes all pending monitored txs
 func (c *Client) monitorTxs(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusCreated, MonitoredTxStatusSent}
-	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
+	iterations, err := c.getMonitoredTxnIteration(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get created monitored txs: %v", err)
+		return fmt.Errorf("failed to get monitored txs: %v", err)
 	}
 
-	log.Debugf("found %v monitored tx to process", len(mTxs))
+	log.Debugf("found %v monitored tx to process", len(iterations))
 
 	wg := sync.WaitGroup{}
-	wg.Add(len(mTxs))
-	for _, mTx := range mTxs {
+	wg.Add(len(iterations))
+	for _, mTx := range iterations {
 		mTx := mTx // force variable shadowing to avoid pointer conflicts
-		go func(c *Client, mTx monitoredTx) {
-			mTxLogger := createMonitoredTxLogger(mTx)
-			defer func(mTx monitoredTx, mTxLogger *log.Logger) {
+		go func(c *Client, mTx *monitoredTxnIteration) {
+			mTxLogger := createMonitoredTxLogger(*mTx.MonitoredTx)
+			defer func(mTxLogger *log.Logger) {
 				if err := recover(); err != nil {
 					mTxLogger.Errorf("monitoring recovered from this err: %v", err)
 				}
 				wg.Done()
-			}(mTx, mTxLogger)
+			}(mTxLogger)
 			c.monitorTx(ctx, mTx, mTxLogger)
 		}(c, mTx)
 	}
@@ -496,7 +503,7 @@ func (c *Client) monitorTxs(ctx context.Context) error {
 
 // waitMinedTxToBeSafe checks all mined monitored txs and wait to set the tx as safe
 func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusMined}
+	statusesFilter := []types.MonitoredTxStatus{types.MonitoredTxStatusMined}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to get mined monitored txs: %v", err)
@@ -504,7 +511,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 
 	log.Debugf("found %v mined monitored tx to process", len(mTxs))
 
-	safeBlockNumber := uint64(0)
+	var safeBlockNumber uint64
 	if c.cfg.SafeStatusL1NumberOfBlocks > 0 {
 		// Overwrite the number of blocks to consider a tx as safe
 		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
@@ -525,7 +532,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 		if mTx.BlockNumber.Uint64() <= safeBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("safe")
-			mTx.Status = MonitoredTxStatusSafe
+			mTx.Status = types.MonitoredTxStatusSafe
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
 				return fmt.Errorf("failed to update mined monitored tx: %v", err)
@@ -539,7 +546,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 // waitSafeTxToBeFinalized checks all safe monitored txs and wait the number of
 // l1 blocks configured to finalize the tx
 func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
-	statusesFilter := []MonitoredTxStatus{MonitoredTxStatusSafe}
+	statusesFilter := []types.MonitoredTxStatus{types.MonitoredTxStatusSafe}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
 		return fmt.Errorf("failed to get safe monitored txs: %v", err)
@@ -547,7 +554,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 
 	log.Debugf("found %v safe monitored tx to process", len(mTxs))
 
-	finaLizedBlockNumber := uint64(0)
+	var finaLizedBlockNumber uint64
 	if c.cfg.SafeStatusL1NumberOfBlocks > 0 {
 		// Overwrite the number of blocks to consider a tx as finalized
 		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
@@ -568,7 +575,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 		if mTx.BlockNumber.Uint64() <= finaLizedBlockNumber {
 			mTxLogger := createMonitoredTxLogger(mTx)
 			mTxLogger.Infof("finalized")
-			mTx.Status = MonitoredTxStatusFinalized
+			mTx.Status = types.MonitoredTxStatusFinalized
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
 				return fmt.Errorf("failed to update safe monitored tx: %v", err)
@@ -580,84 +587,17 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 }
 
 // monitorTx does all the monitoring steps to the monitored tx
-func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Logger) {
+func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logger *log.Logger) {
 	var err error
 	logger.Info("processing")
-	// check if any of the txs in the history was confirmed
-	var lastReceiptChecked types.Receipt
-	// monitored tx is confirmed until we find a successful receipt
-	confirmed := false
-	// monitored tx doesn't have a failed receipt until we find a failed receipt for any
-	// tx in the monitored tx history
-	hasFailedReceipts := false
-	// all history txs are considered mined until we can't find a receipt for any
-	// tx in the monitored tx history
-	allHistoryTxsWereMined := true
-	for txHash := range mTx.History {
-		mined, receipt, err := c.etherman.CheckTxWasMined(ctx, txHash)
-		if err != nil {
-			logger.Errorf("failed to check if tx %v was mined: %v", txHash.String(), err)
-			continue
-		}
 
-		// if the tx is not mined yet, check that not all the tx were mined and go to the next
-		if !mined {
-			allHistoryTxsWereMined = false
-			continue
-		}
-
-		lastReceiptChecked = *receipt
-
-		// if the tx was mined successfully we can set it as confirmed and break the loop
-		if lastReceiptChecked.Status == types.ReceiptStatusSuccessful {
-			confirmed = true
-			break
-		}
-
-		// if the tx was mined but failed, we continue to consider it was not confirmed
-		// and set that we have found a failed receipt. This info will be used later
-		// to check if nonce needs to be reviewed
-		confirmed = false
-		hasFailedReceipts = true
-	}
-
-	// we need to check if we need to review the nonce carefully, to avoid sending
-	// duplicated data to the roll-up and causing an unnecessary trusted state reorg.
-	//
-	// if we have failed receipts, this means at least one of the generated txs was mined,
-	// in this case maybe the current nonce was already consumed(if this is the first iteration
-	// of this cycle, next iteration might have the nonce already updated by the preivous one),
-	// then we need to check if there are tx that were not mined yet, if so, we just need to wait
-	// because maybe one of them will get mined successfully
-	//
-	// in case of the monitored tx is not confirmed yet, all tx were mined and none of them were
-	// mined successfully, we need to review the nonce
-	if !confirmed && hasFailedReceipts && allHistoryTxsWereMined {
-		logger.Infof("nonce needs to be updated")
-		err := c.reviewMonitoredTxNonce(ctx, &mTx, logger)
-		if err != nil {
-			logger.Errorf("failed to review monitored tx nonce: %v", err)
-			return
-		}
-		err = c.storage.Update(ctx, mTx)
-		if err != nil {
-			logger.Errorf("failed to update monitored tx nonce change: %v", err)
-			return
-		}
-	}
-
-	var signedTx *types.Transaction
-	if !confirmed {
+	var signedTx *ethTypes.Transaction
+	if !mTx.confirmed {
 		// review tx and increase gas and gas price if needed
-		if mTx.Status == MonitoredTxStatusSent {
-			err := c.reviewMonitoredTx(ctx, &mTx, logger)
+		if mTx.Status == types.MonitoredTxStatusSent {
+			err := c.reviewMonitoredTxGas(ctx, mTx, logger)
 			if err != nil {
 				logger.Errorf("failed to review monitored tx: %v", err)
-				return
-			}
-			err = c.storage.Update(ctx, mTx)
-			if err != nil {
-				logger.Errorf("failed to update monitored tx review change: %v", err)
 				return
 			}
 		}
@@ -668,7 +608,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 
 		// sign tx
 		if c.cfg.CustodialAssets.Enable { // X Layer
-			signedTx, err = c.signTx(mTx, tx)
+			signedTx, err = c.signTx(*mTx.MonitoredTx, tx)
 			if err != nil {
 				logger.Fatalf("failed to sign tx %v: %v", tx.Hash().String(), err)
 			}
@@ -690,7 +630,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			return
 		} else {
 			// update monitored tx changes into storage
-			err = c.storage.Update(ctx, mTx)
+			err = c.storage.Update(ctx, *mTx.MonitoredTx)
 			if err != nil {
 				logger.Errorf("failed to update monitored tx: %v", err)
 				return
@@ -709,12 +649,12 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 				return
 			}
 			logger.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
-			if mTx.Status == MonitoredTxStatusCreated {
+			if mTx.Status == types.MonitoredTxStatusCreated {
 				// update tx status to sent
-				mTx.Status = MonitoredTxStatusSent
+				mTx.Status = types.MonitoredTxStatusSent
 				logger.Debugf("status changed to %v", string(mTx.Status))
 				// update monitored tx changes into storage
-				err = c.storage.Update(ctx, mTx)
+				err = c.storage.Update(ctx, *mTx.MonitoredTx)
 				if err != nil {
 					logger.Errorf("failed to update monitored tx changes: %v", err)
 					return
@@ -727,7 +667,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 		log.Infof("waiting signedTx to be mined...")
 
 		// wait tx to get mined
-		confirmed, err = c.etherman.WaitTxToBeMined(ctx, signedTx, c.cfg.WaitTxToBeMined.Duration)
+		confirmed, err := c.etherman.WaitTxToBeMined(ctx, signedTx, c.cfg.WaitTxToBeMined.Duration)
 		if err != nil {
 			logger.Warnf("failed to wait tx to be mined: %v", err)
 			return
@@ -737,7 +677,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			return
 		}
 
-		var txReceipt *types.Receipt
+		var txReceipt *ethTypes.Receipt
 		waitingReceiptTimeout := time.Now().Add(c.cfg.GetReceiptMaxTime.Duration)
 		// get tx receipt
 		for {
@@ -746,7 +686,12 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 				if waitingReceiptTimeout.After(time.Now()) {
 					time.Sleep(c.cfg.GetReceiptWaitInterval.Duration)
 				} else {
-					logger.Warnf("failed to get tx receipt for tx %v after %v: %v", signedTx.Hash().String(), c.cfg.GetReceiptMaxTime, err)
+					logger.Warnf(
+						"failed to get tx receipt for tx %v after %v: %v",
+						signedTx.Hash().String(),
+						c.cfg.GetReceiptMaxTime,
+						err,
+					)
 					return
 				}
 			} else {
@@ -754,28 +699,29 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 			}
 		}
 
-		lastReceiptChecked = *txReceipt
+		mTx.lastReceipt = txReceipt
+		mTx.confirmed = confirmed
 	}
 
 	// if mined, check receipt and mark as Failed or Confirmed
-	if lastReceiptChecked.Status == types.ReceiptStatusSuccessful {
-		mTx.Status = MonitoredTxStatusMined
-		mTx.BlockNumber = lastReceiptChecked.BlockNumber
+	if mTx.lastReceipt.Status == ethTypes.ReceiptStatusSuccessful {
+		mTx.Status = types.MonitoredTxStatusMined
+		mTx.BlockNumber = mTx.lastReceipt.BlockNumber
 		logger.Info("mined")
 	} else {
 		// if we should continue to monitor, we move to the next one and this will
 		// be reviewed in the next monitoring cycle
-		if c.shouldContinueToMonitorThisTx(ctx, lastReceiptChecked) {
+		if c.shouldContinueToMonitorThisTx(ctx, mTx.lastReceipt) {
 			return
 		}
 		// otherwise we understand this monitored tx has failed
-		mTx.Status = MonitoredTxStatusFailed
-		mTx.BlockNumber = lastReceiptChecked.BlockNumber
+		mTx.Status = types.MonitoredTxStatusFailed
+		mTx.BlockNumber = mTx.lastReceipt.BlockNumber
 		logger.Info("failed")
 	}
 
 	// update monitored tx changes into storage
-	err = c.storage.Update(ctx, mTx)
+	err = c.storage.Update(ctx, *mTx.MonitoredTx)
 	if err != nil {
 		logger.Errorf("failed to update monitored tx: %v", err)
 		return
@@ -784,9 +730,9 @@ func (c *Client) monitorTx(ctx context.Context, mTx monitoredTx, logger *log.Log
 
 // shouldContinueToMonitorThisTx checks the the tx receipt and decides if it should
 // continue or not to monitor the monitored tx related to the tx from this receipt
-func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt types.Receipt) bool {
+func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt *ethTypes.Receipt) bool {
 	// if the receipt has a is successful result, stop monitoring
-	if receipt.Status == types.ReceiptStatusSuccessful {
+	if receipt.Status == ethTypes.ReceiptStatusSuccessful {
 		return false
 	}
 
@@ -801,21 +747,27 @@ func (c *Client) shouldContinueToMonitorThisTx(ctx context.Context, receipt type
 		if err.Error() == ErrExecutionReverted.Error() {
 			return true
 		} else {
-			log.Errorf("failed to get revert message for monitored tx identified as failed, tx %v: %v", receipt.TxHash.String(), err)
+			log.Errorf(
+				"failed to get revert message for monitored tx identified as failed, tx %v: %v",
+				receipt.TxHash.String(),
+				err,
+			)
 		}
 	}
 	// if nothing weird was found, stop monitoring
 	return false
 }
 
-// reviewMonitoredTx checks if some field needs to be updated
+// reviewMonitoredTxGas checks if gas fields needs to be updated
 // accordingly to the current information stored and the current
 // state of the blockchain
-func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLogger *log.Logger) error {
+func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIteration, mTxLogger *log.Logger) error {
 	mTxLogger.Debug("reviewing")
 	isBlobTx := mTx.BlobSidecar != nil
-	var err error
-	var gas uint64
+	var (
+		err error
+		gas uint64
+	)
 
 	// get gas price
 	gasPrice, err := c.suggestedGasPrice(ctx)
@@ -827,11 +779,20 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 
 	// check gas price
 	if gasPrice.Cmp(mTx.GasPrice) == 1 {
-		mTxLogger.Infof("monitored tx (blob? %t) GasPrice updated from %v to %v", isBlobTx, mTx.GasPrice.String(), gasPrice.String())
+		mTxLogger.Infof(
+			"monitored tx (blob? %t) GasPrice updated from %v to %v",
+			isBlobTx,
+			mTx.GasPrice.String(),
+			gasPrice.String(),
+		)
 		mTx.GasPrice = gasPrice
 	}
 
 	// get gas
+	if !mTx.EstimateGas {
+		mTxLogger.Info("tx is using a hardcoded gas, avoiding estimate gas")
+		return nil
+	}
 	if mTx.BlobSidecar != nil {
 		// blob gas price estimation
 		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
@@ -890,30 +851,58 @@ func (c *Client) reviewMonitoredTx(ctx context.Context, mTx *monitoredTx, mTxLog
 		mTxLogger.Infof("monitored tx (blob? %t) Gas updated from %v to %v", isBlobTx, mTx.Gas, gas)
 		mTx.Gas = gas
 	}
+
+	err = c.storage.Update(ctx, *mTx.MonitoredTx)
+	if err != nil {
+		return fmt.Errorf("failed to update monitored tx changes: %w", err)
+	}
+
 	return nil
 }
 
-// reviewMonitoredTxNonce checks if the nonce needs to be updated accordingly to
-// the current nonce of the sender account.
-//
-// IMPORTANT: Nonce is reviewed apart from the other fields because it is a very
-// sensible information and can make duplicated data to be sent to the blockchain,
-// causing possible side effects and wasting resources.
-func (c *Client) reviewMonitoredTxNonce(ctx context.Context, mTx *monitoredTx, mTxLogger *log.Logger) error {
-	mTxLogger.Debug("reviewing nonce")
-	nonce, err := c.getTxNonce(ctx, mTx.From)
+// getMonitoredTxnIteration gets all monitored txs that need to be sent or resent in current monitor iteration
+func (c *Client) getMonitoredTxnIteration(ctx context.Context) ([]*monitoredTxnIteration, error) {
+	txsToUpdate, err := c.storage.GetByStatus(ctx,
+		[]types.MonitoredTxStatus{types.MonitoredTxStatusCreated, types.MonitoredTxStatusSent})
 	if err != nil {
-		err := fmt.Errorf("failed to load current nonce for acc %v: %w", mTx.From.String(), err)
-		mTxLogger.Errorf(err.Error())
-		return err
+		return nil, fmt.Errorf("failed to get txs to update nonces: %w", err)
 	}
 
-	if nonce > mTx.Nonce {
-		mTxLogger.Infof("monitored tx nonce updated from %v to %v", mTx.Nonce, nonce)
-		mTx.Nonce = nonce
+	iterations := make([]*monitoredTxnIteration, 0, len(txsToUpdate))
+	senderNonces := make(map[common.Address]uint64)
+
+	for _, tx := range txsToUpdate {
+		tx := tx
+
+		iteration := &monitoredTxnIteration{MonitoredTx: &tx}
+		iterations = append(iterations, iteration)
+
+		updateNonce := iteration.shouldUpdateNonce(ctx, c.etherman)
+		if !updateNonce {
+			continue
+		}
+
+		nonce, ok := senderNonces[tx.From]
+		if !ok {
+			// if there are no pending txs, we get the pending nonce from the etherman
+			nonce, err = c.etherman.PendingNonce(ctx, tx.From)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get pending nonce for sender: %s. Error: %w", tx.From, err)
+			}
+
+			senderNonces[tx.From] = nonce
+		}
+
+		iteration.Nonce = nonce
+		err = c.storage.Update(ctx, tx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update nonce for tx %v: %w", tx.ID.String(), err)
+		}
+
+		senderNonces[tx.From]++
 	}
 
-	return nil
+	return iterations, nil
 }
 
 func (c *Client) suggestedGasPrice(ctx context.Context) (*big.Int, error) {
@@ -948,18 +937,18 @@ func (c *Client) logErrorAndWait(msg string, err error) {
 
 // ResultHandler used by the caller to handle results
 // when processing monitored txs
-type ResultHandler func(MonitoredTxResult)
+type ResultHandler func(types.MonitoredTxResult)
 
 // ProcessPendingMonitoredTxs will check all monitored txs
 // and wait until all of them are either confirmed or failed before continuing
 //
 // for the confirmed and failed ones, the resultHandler will be triggered
 func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler ResultHandler) {
-	statusesFilter := []MonitoredTxStatus{
-		MonitoredTxStatusCreated,
-		MonitoredTxStatusSent,
-		MonitoredTxStatusFailed,
-		MonitoredTxStatusMined,
+	statusesFilter := []types.MonitoredTxStatus{
+		types.MonitoredTxStatusCreated,
+		types.MonitoredTxStatusSent,
+		types.MonitoredTxStatusFailed,
+		types.MonitoredTxStatusMined,
 	}
 	// keep running until there are pending monitored txs
 	for {
@@ -980,7 +969,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 			mTxResultLogger := CreateMonitoredTxResultLogger(result)
 
 			// if the result is confirmed, we set it as done do stop looking into this monitored tx
-			if result.Status == MonitoredTxStatusMined {
+			if result.Status == types.MonitoredTxStatusMined {
 				err := c.setStatusSafe(ctx, result.ID)
 				if err != nil {
 					mTxResultLogger.Errorf("failed to set monitored tx as safe, err: %v", err)
@@ -995,7 +984,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 			}
 
 			// if the result is failed, we need to go around it and rebuild a batch verification
-			if result.Status == MonitoredTxStatusFailed {
+			if result.Status == types.MonitoredTxStatusFailed {
 				resultHandler(result)
 				continue
 			}
@@ -1012,8 +1001,11 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 					continue
 				}
 
-				// if the result status is confirmed or failed, breaks the wait loop
-				if result.Status == MonitoredTxStatusMined || result.Status == MonitoredTxStatusFailed {
+				// if the result status is mined, safe, finalized or failed, breaks the wait loop
+				if result.Status == types.MonitoredTxStatusMined ||
+					result.Status == types.MonitoredTxStatusSafe ||
+					result.Status == types.MonitoredTxStatusFinalized ||
+					result.Status == types.MonitoredTxStatusFailed {
 					break
 				}
 
@@ -1027,7 +1019,11 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 	dataLen := len(data)
 	if dataLen > params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1) {
-		log.Infof("blob data longer than allowed (length: %v, limit: %v)", dataLen, params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1))
+		log.Infof(
+			"blob data longer than allowed (length: %v, limit: %v)",
+			dataLen,
+			params.BlobTxFieldElementsPerBlob*(params.BlobTxBytesPerFieldElement-1),
+		)
 		return kzg4844.Blob{}, errors.New("blob data longer than allowed")
 	}
 
@@ -1041,19 +1037,19 @@ func (c *Client) EncodeBlobData(data []byte) (kzg4844.Blob, error) {
 		if fieldIndex == params.BlobTxFieldElementsPerBlob {
 			break
 		}
-		max := i + (elemSize - 1)
-		if max > len(data) {
-			max = len(data)
+		maxIndex := i + (elemSize - 1)
+		if maxIndex > len(data) {
+			maxIndex = len(data)
 		}
-		copy(blob[fieldIndex*elemSize+1:], data[i:max])
+		copy(blob[fieldIndex*elemSize+1:], data[i:maxIndex])
 	}
 	return blob, nil
 }
 
 // MakeBlobSidecar constructs a blob tx sidecar
-func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
-	var commitments []kzg4844.Commitment
-	var proofs []kzg4844.Proof
+func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *ethTypes.BlobTxSidecar {
+	commitments := make([]kzg4844.Commitment, 0, len(blobs))
+	proofs := make([]kzg4844.Proof, 0, len(blobs))
 
 	for _, blob := range blobs {
 		// avoid memory aliasing
@@ -1065,7 +1061,7 @@ func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
 		proofs = append(proofs, p)
 	}
 
-	return &types.BlobTxSidecar{
+	return &ethTypes.BlobTxSidecar{
 		Blobs:       blobs,
 		Commitments: commitments,
 		Proofs:      proofs,
@@ -1073,8 +1069,8 @@ func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *types.BlobTxSidecar {
 }
 
 // createMonitoredTxLogger creates an instance of logger with all the important
-// fields already set for a monitoredTx
-func createMonitoredTxLogger(mTx monitoredTx) *log.Logger {
+// fields already set for a types.MonitoredTx
+func createMonitoredTxLogger(mTx types.MonitoredTx) *log.Logger {
 	return log.WithFields(
 		"monitoredTxId", mTx.ID,
 		"createdAt", mTx.CreatedAt,
@@ -1084,8 +1080,8 @@ func createMonitoredTxLogger(mTx monitoredTx) *log.Logger {
 }
 
 // CreateLogger creates an instance of logger with all the important
-// fields already set for a monitoredTx without requiring an instance of
-// monitoredTx, this should be use in for callers before calling the ADD
+// fields already set for a types.MonitoredTx without requiring an instance of
+// types.MonitoredTx, this should be use in for callers before calling the ADD
 // method
 func CreateLogger(monitoredTxId common.Hash, from common.Address, to *common.Address) *log.Logger {
 	return log.WithFields(
@@ -1096,8 +1092,8 @@ func CreateLogger(monitoredTxId common.Hash, from common.Address, to *common.Add
 }
 
 // CreateMonitoredTxResultLogger creates an instance of logger with all the important
-// fields already set for a MonitoredTxResult
-func CreateMonitoredTxResultLogger(mTxResult MonitoredTxResult) *log.Logger {
+// fields already set for a types.MonitoredTxResult
+func CreateMonitoredTxResultLogger(mTxResult types.MonitoredTxResult) *log.Logger {
 	return log.WithFields(
 		"monitoredTxId", mTxResult.ID.String(),
 	)

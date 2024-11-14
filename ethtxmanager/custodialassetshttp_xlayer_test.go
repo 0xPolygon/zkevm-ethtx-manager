@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	zktypes "github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/hex"
+	zktypes "github.com/0xPolygon/zkevm-ethtx-manager/config/types"
+	"github.com/0xPolygon/zkevm-ethtx-manager/hex"
+	zkmanTypes "github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/google/uuid"
@@ -60,7 +61,7 @@ func TestClientPostSignRequestAndWaitResultSeqFork8(t *testing.T) {
 
 	seqReq, _ := client.unpackSequenceBatchesTx(tx)
 	to := common.HexToAddress(contractAddr)
-	mTx := monitoredTx{
+	mTx := zkmanTypes.MonitoredTx{
 		From:      common.HexToAddress(seqAddr),
 		To:        &to,
 		GasPrice:  big.NewInt(12345678912),
@@ -110,7 +111,7 @@ func TestClientPostSignRequestAndWaitResultAggFork8(t *testing.T) {
 	seqReq, _ := client.unpackVerifyBatchesTrustedAggregatorTx(tx)
 
 	to := common.HexToAddress(contractAddrAgg)
-	mTx := monitoredTx{
+	mTx := zkmanTypes.MonitoredTx{
 		From:      common.HexToAddress(aggAddr),
 		To:        &to,
 		Nonce:     0,

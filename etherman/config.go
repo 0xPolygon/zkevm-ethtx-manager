@@ -1,7 +1,7 @@
 package etherman
 
 import (
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/etherman/etherscan"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/etherscan"
 	"github.com/ethereum/go-ethereum/common"
 )
 

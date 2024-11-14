@@ -1,7 +1,7 @@
 package ethtxmanager
 
 import (
-	"github.com/0xPolygonHermez/zkevm-ethtx-manager/config/types"
+	"github.com/0xPolygon/zkevm-ethtx-manager/config/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
