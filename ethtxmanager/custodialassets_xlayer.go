@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/smartcontracts/polygonrollupmanager_xlayer"
-	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/smartcontracts/polygonvalidium_xlayer"
+	"github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonrollupmanager"
+	"github.com/0xPolygon/cdk-contracts-tooling/contracts/banana/polygonvalidiumetrog"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	zkmanTypes "github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -49,11 +49,12 @@ func (key contextKey) String() string {
 }
 
 type sequenceBatchesArgs struct {
-	Batches                 []polygonvalidium_xlayer.PolygonValidiumEtrogValidiumBatchData `json:"batches"`
-	MaxSequenceTimestamp    uint64                                                         `json:"maxSequenceTimestamp"`
-	InitSequencedBatch      uint64                                                         `json:"initSequencedBatch"`
-	L2Coinbase              common.Address                                                 `json:"l2Coinbase"`
-	DataAvailabilityMessage []byte                                                         `json:"dataAvailabilityMessage"`
+	Batches                   []polygonvalidiumetrog.PolygonValidiumEtrogValidiumBatchData `json:"batches"`
+	MaxSequenceTimestamp      uint64                                                       `json:"maxSequenceTimestamp"`
+	L2Coinbase                common.Address                                               `json:"l2Coinbase"`
+	DataAvailabilityMessage   []byte                                                       `json:"dataAvailabilityMessage"`
+	L1InfoTreeLeafCount       uint32                                                       `json:"indexL1InfoRoot"`
+	ExpectedFinalAccInputHash [32]byte                                                     `json:"expectedFinalAccInputHash"` //nolint:all
 }
 
 type verifyBatchesTrustedAggregatorArgs struct {
@@ -138,7 +139,7 @@ func (c *Client) unpackSequenceBatchesTx(tx *types.Transaction) (*sequenceBatche
 	if tx == nil || len(tx.Data()) < sigLen {
 		return nil, errEmptyTx
 	}
-	retArgs, err := unpack(tx.Data(), polygonvalidium_xlayer.PolygonvalidiumXlayerMetaData.ABI)
+	retArgs, err := unpack(tx.Data(), polygonvalidiumetrog.PolygonvalidiumetrogMetaData.ABI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unpack tx %x data: %v", tx.Hash(), err)
 	}
@@ -161,7 +162,7 @@ func (c *Client) unpackVerifyBatchesTrustedAggregatorTx(
 	if tx == nil || len(tx.Data()) < sigLen {
 		return nil, errEmptyTx
 	}
-	retArgs, err := unpack(tx.Data(), polygonrollupmanager_xlayer.PolygonrollupmanagerMetaData.ABI)
+	retArgs, err := unpack(tx.Data(), polygonrollupmanager.PolygonrollupmanagerMetaData.ABI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unpack tx %x data: %v", tx.Hash(), err)
 	}
@@ -228,24 +229,26 @@ func (s *sequenceBatchesArgs) marshal(contractAddress common.Address, mTx zkmanT
 	}
 	gp := getGasPriceEther(mTx.GasPrice)
 	httpArgs := struct {
-		Batches                 []batchData    `json:"batches"`
-		MaxSequenceTimestamp    uint64         `json:"maxSequenceTimestamp"`
-		InitSequencedBatch      uint64         `json:"initSequencedBatch"`
-		L2Coinbase              common.Address `json:"l2Coinbase"`
-		DataAvailabilityMessage string         `json:"dataAvailabilityMessage"`
-		ContractAddress         common.Address `json:"contractAddress"`
-		GasLimit                uint64         `json:"gasLimit"`
-		GasPrice                string         `json:"gasPrice"`
-		Nonce                   uint64         `json:"nonce"`
+		Batches                   []batchData    `json:"batches"`
+		MaxSequenceTimestamp      uint64         `json:"maxSequenceTimestamp"`
+		L2Coinbase                common.Address `json:"l2Coinbase"`
+		DataAvailabilityMessage   string         `json:"dataAvailabilityMessage"`
+		ContractAddress           common.Address `json:"contractAddress"`
+		GasLimit                  uint64         `json:"gasLimit"`
+		GasPrice                  string         `json:"gasPrice"`
+		Nonce                     uint64         `json:"nonce"`
+		L1InfoTreeLeafCount       uint32         `json:"l1InfoTreeLeafCount"`
+		ExpectedFinalAccInputHash string         `json:"expectedFinalAccInputHash"`
 	}{
-		MaxSequenceTimestamp:    s.MaxSequenceTimestamp,
-		InitSequencedBatch:      s.InitSequencedBatch,
-		L2Coinbase:              s.L2Coinbase,
-		DataAvailabilityMessage: hex.EncodeToString(s.DataAvailabilityMessage),
-		ContractAddress:         contractAddress,
-		GasLimit:                mTx.Gas + mTx.GasOffset,
-		GasPrice:                gp,
-		Nonce:                   mTx.Nonce,
+		MaxSequenceTimestamp:      s.MaxSequenceTimestamp,
+		L2Coinbase:                s.L2Coinbase,
+		DataAvailabilityMessage:   hex.EncodeToString(s.DataAvailabilityMessage),
+		ContractAddress:           contractAddress,
+		GasLimit:                  mTx.Gas + mTx.GasOffset,
+		GasPrice:                  gp,
+		Nonce:                     mTx.Nonce,
+		L1InfoTreeLeafCount:       s.L1InfoTreeLeafCount,
+		ExpectedFinalAccInputHash: "0x" + hex.EncodeToString(s.ExpectedFinalAccInputHash[:]),
 	}
 
 	httpArgs.Batches = make([]batchData, 0, len(s.Batches))

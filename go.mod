@@ -3,6 +3,7 @@ module github.com/0xPolygon/zkevm-ethtx-manager
 go 1.21.3
 
 require (
+	github.com/0xPolygon/cdk-contracts-tooling v0.0.0-20240826154954-f6182d2b17a2
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.7.0
 	github.com/ethereum/go-ethereum v1.14.8
 	github.com/google/uuid v1.6.0
@@ -38,11 +39,6 @@ require (
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
-	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
