@@ -55,6 +55,10 @@ type externalGasProviders struct {
 
 // NewClient creates a new etherman.
 func NewClient(cfg Config) (*Client, error) {
+	if cfg.URL == "" {
+		return nil, errors.New("Ethereum node URL cannot be empty")
+	}
+
 	// Connect to ethereum node
 	ethClient, err := ethclient.Dial(cfg.URL)
 	if err != nil {
@@ -64,6 +68,17 @@ func NewClient(cfg Config) (*Client, error) {
 
 	for key, value := range cfg.HTTPHeaders {
 		ethClient.Client().SetHeader(key, value)
+	}
+
+	// Fetch chain ID if not provided
+	if cfg.L1ChainID == 0 {
+		chainID, err := ethClient.ChainID(context.Background())
+		if err != nil {
+			log.Errorf("Failed to fetch chain ID from node: %+v", err)
+			return nil, err
+		}
+		cfg.L1ChainID = chainID.Uint64()
+		log.Infof("Etherman L1ChainID set to %d from node URL", cfg.L1ChainID)
 	}
 
 	gProviders := []ethereum.GasPricer{ethClient}
