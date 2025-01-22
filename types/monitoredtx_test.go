@@ -44,12 +44,14 @@ func TestAddHistory(t *testing.T) {
 		History: make(map[common.Hash]bool),
 	}
 
-	err := mTx.AddHistory(tx)
+	found, err := mTx.AddHistory(tx)
 	assert.NoError(t, err)
+	assert.False(t, found)
 
 	// Adding the same transaction again should return an error
-	err = mTx.AddHistory(tx)
+	found, err = mTx.AddHistory(tx)
 	assert.ErrorContains(t, err, "already exists")
+	assert.True(t, found)
 
 	// should have only one history
 	historySlice := mTx.HistoryHashSlice()

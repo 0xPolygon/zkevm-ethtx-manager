@@ -615,11 +615,11 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 		logger.Debugf("signed tx %v created", signedTx.Hash().String())
 
 		// add tx to monitored tx history
-		err = mTx.AddHistory(signedTx)
-		if errors.Is(err, ErrAlreadyExists) {
+		found, err := mTx.AddHistory(signedTx)
+		if found {
 			logger.Infof("signed tx already existed in the history")
 		} else if err != nil {
-			logger.Errorf("failed to add signed tx %v to monitored tx history. Error: %v", signedTx.Hash().String(), err)
+			logger.Errorf("failed to add signed tx %v to monitored tx history: %v", signedTx.Hash().String(), err)
 			return
 		} else {
 			// update monitored tx changes into storage
