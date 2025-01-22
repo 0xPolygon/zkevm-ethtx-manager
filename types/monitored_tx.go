@@ -105,7 +105,7 @@ type MonitoredTx struct {
 }
 
 // Tx uses the current information to build a tx
-func (mTx MonitoredTx) Tx() *types.Transaction {
+func (mTx *MonitoredTx) Tx() *types.Transaction {
 	var tx *types.Transaction
 	if mTx.BlobSidecar == nil {
 		tx = types.NewTx(&types.LegacyTx{
