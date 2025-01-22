@@ -135,7 +135,7 @@ func (mTx MonitoredTx) Tx() *types.Transaction {
 }
 
 // AddHistory adds a transaction to the monitoring history
-func (mTx MonitoredTx) AddHistory(tx *types.Transaction) error {
+func (mTx *MonitoredTx) AddHistory(tx *types.Transaction) error {
 	if _, found := mTx.History[tx.Hash()]; found {
 		return ErrAlreadyExists
 	}
