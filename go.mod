@@ -6,7 +6,7 @@ require (
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v1.0.6
 	github.com/ethereum/go-ethereum v1.14.10
 	github.com/hermeznetwork/tracerr v0.3.2
-	github.com/holiman/uint256 v1.3.1
+	github.com/holiman/uint256 v1.3.2
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/rubenv/sql-migrate v1.7.0
 	github.com/russross/meddler v1.0.1
