@@ -1,10 +1,10 @@
 module github.com/0xPolygon/zkevm-ethtx-manager
 
-go 1.21.3
+go 1.22
 
 require (
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v0.7.0
-	github.com/ethereum/go-ethereum v1.14.8
+	github.com/ethereum/go-ethereum v1.14.10
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.3.1
 	github.com/mattn/go-sqlite3 v1.14.23
@@ -21,7 +21,6 @@ require (
 	github.com/bits-and-blooms/bitset v1.14.2 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240816210425-c5d0cb0b6fc0 // indirect
-	github.com/cockroachdb/pebble v1.1.2 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.13.0 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
@@ -30,6 +29,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.3 // indirect
+	github.com/ethereum/go-verkle v0.1.1-0.20240829091221-dffa7562dbe9 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/getsentry/sentry-go v0.28.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
