@@ -105,7 +105,7 @@ type MonitoredTx struct {
 }
 
 // Tx uses the current information to build a tx
-func (mTx MonitoredTx) Tx() *types.Transaction {
+func (mTx *MonitoredTx) Tx() *types.Transaction {
 	var tx *types.Transaction
 	if mTx.BlobSidecar == nil {
 		tx = types.NewTx(&types.LegacyTx{
@@ -135,12 +135,12 @@ func (mTx MonitoredTx) Tx() *types.Transaction {
 }
 
 // AddHistory adds a transaction to the monitoring history
-func (mTx MonitoredTx) AddHistory(tx *types.Transaction) error {
+func (mTx *MonitoredTx) AddHistory(tx *types.Transaction) (bool, error) {
 	if _, found := mTx.History[tx.Hash()]; found {
-		return ErrAlreadyExists
+		return true, ErrAlreadyExists
 	}
 	mTx.History[tx.Hash()] = true
-	return nil
+	return false, nil
 }
 
 // HistoryHashSlice returns the current history field as a string slice
