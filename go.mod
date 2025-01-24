@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v1.0.6
-	github.com/ethereum/go-ethereum v1.14.12
+	github.com/ethereum/go-ethereum v1.14.10
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.3.2
 	github.com/mattn/go-sqlite3 v1.14.24
@@ -19,6 +19,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/bits-and-blooms/bitset v1.14.2 // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240816210425-c5d0cb0b6fc0 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.13.0 // indirect
