@@ -214,18 +214,27 @@ func (c *Client) add(
 
 	if sidecar != nil {
 		// blob gas price estimation
-		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
+		header, err := c.etherman.GetHeaderByNumber(ctx, nil)
+		if err != nil {
+			log.Errorf("failed to get header: %v", err)
+			return common.Hash{}, err
+		}
+		parentNumber := new(big.Int).Sub(header.Number, big.NewInt(1))
+		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, parentNumber)
 		if err != nil {
 			log.Errorf("failed to get parent header: %v", err)
 			return common.Hash{}, err
 		}
 
 		if parentHeader.ExcessBlobGas != nil && parentHeader.BlobGasUsed != nil {
-			parentExcessBlobGas := eip4844.CalcExcessBlobGas(*parentHeader.ExcessBlobGas, *parentHeader.BlobGasUsed)
-			blobFeeCap = eip4844.CalcBlobFee(parentExcessBlobGas)
+			parentExcessBlobGas := eip4844.CalcExcessBlobGas(&params.ChainConfig{}, parentHeader, header.Time)
+			blobFeeCap = eip4844.CalcBlobFee(&params.ChainConfig{}, parentHeader)
+			if *header.ExcessBlobGas != parentExcessBlobGas {
+				return common.Hash{}, fmt.Errorf("invalid excessBlobGas: have %d, want %d", *header.ExcessBlobGas, parentExcessBlobGas)
+			}
 		} else {
 			log.Infof("legacy parent header no blob gas info")
-			blobFeeCap = eip4844.CalcBlobFee(0)
+			blobFeeCap = big.NewInt(params.BlobTxMinBlobGasprice)
 		}
 
 		gasTipCap, err = c.etherman.GetSuggestGasTipCap(ctx)
@@ -788,7 +797,13 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 	}
 	if mTx.BlobSidecar != nil {
 		// blob gas price estimation
-		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, nil)
+		header, err := c.etherman.GetHeaderByNumber(ctx, nil)
+		if err != nil {
+			log.Errorf("failed to get header: %v", err)
+			return err
+		}
+		parentNumber := new(big.Int).Sub(header.Number, big.NewInt(1))
+		parentHeader, err := c.etherman.GetHeaderByNumber(ctx, parentNumber)
 		if err != nil {
 			log.Errorf("failed to get parent header: %v", err)
 			return err
@@ -796,11 +811,14 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 
 		var blobFeeCap *big.Int
 		if parentHeader.ExcessBlobGas != nil && parentHeader.BlobGasUsed != nil {
-			parentExcessBlobGas := eip4844.CalcExcessBlobGas(*parentHeader.ExcessBlobGas, *parentHeader.BlobGasUsed)
-			blobFeeCap = eip4844.CalcBlobFee(parentExcessBlobGas)
+			parentExcessBlobGas := eip4844.CalcExcessBlobGas(&params.ChainConfig{}, parentHeader, header.Time)
+			blobFeeCap = eip4844.CalcBlobFee(&params.ChainConfig{}, parentHeader)
+			if *header.ExcessBlobGas != parentExcessBlobGas {
+				return fmt.Errorf("invalid excessBlobGas: have %d, want %d", *header.ExcessBlobGas, parentExcessBlobGas)
+			}
 		} else {
 			log.Infof("legacy parent header no blob gas info")
-			blobFeeCap = eip4844.CalcBlobFee(0)
+			blobFeeCap = big.NewInt(params.BlobTxMinBlobGasprice)
 		}
 
 		gasTipCap, err := c.etherman.GetSuggestGasTipCap(ctx)
