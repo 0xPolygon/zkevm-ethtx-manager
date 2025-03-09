@@ -1,10 +1,10 @@
 module github.com/0xPolygon/zkevm-ethtx-manager
 
-go 1.24.0
+go 1.23.7
 
 require (
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v1.0.6
-	github.com/ethereum/go-ethereum v1.15.4
+	github.com/ethereum/go-ethereum v1.15.5
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.3.2
 	github.com/mattn/go-sqlite3 v1.14.24
