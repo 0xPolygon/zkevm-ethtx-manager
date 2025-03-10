@@ -230,7 +230,8 @@ func (c *Client) add(
 			parentExcessBlobGas := eip4844.CalcExcessBlobGas(&params.ChainConfig{}, parentHeader, header.Time)
 			blobFeeCap = eip4844.CalcBlobFee(&params.ChainConfig{}, parentHeader)
 			if *header.ExcessBlobGas != parentExcessBlobGas {
-				return common.Hash{}, fmt.Errorf("invalid excessBlobGas: have %d, want %d", *header.ExcessBlobGas, parentExcessBlobGas)
+				return common.Hash{}, fmt.Errorf("invalid excessBlobGas: have %d, want %d",
+					*header.ExcessBlobGas, parentExcessBlobGas)
 			}
 		} else {
 			log.Infof("legacy parent header no blob gas info")
