@@ -124,3 +124,17 @@ func TestWaitTxToBeMined(t *testing.T) {
 	require.False(t, res)
 	require.NoError(t, err)
 }
+
+func TestCheckTxWasMined(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	sut := Client{
+		EthClient: mockEth,
+	}
+	mockEth.EXPECT().TransactionReceipt(mock.Anything, mock.Anything).Return(nil, errGenericNotFound)
+	to := common.HexToAddress("0x1")
+	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
+	res, receipt, err := sut.CheckTxWasMined(context.TODO(), tx.Hash())
+	require.Nil(t, receipt)
+	require.False(t, res)
+	require.NoError(t, err)
+}
