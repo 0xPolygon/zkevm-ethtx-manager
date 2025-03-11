@@ -32,8 +32,6 @@ import (
 const failureIntervalInSeconds = 5
 
 var (
-	// ErrNotFound when the object is not found
-	ErrNotFound = errors.New("not found")
 	// ErrAlreadyExists when the object already exists
 	ErrAlreadyExists = errors.New("already exists")
 
