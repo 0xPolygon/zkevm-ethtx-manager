@@ -93,7 +93,6 @@ func TestSignTx(t *testing.T) {
 	signer, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(1337))
 	require.NoError(t, err)
 	sut.auth[to] = *signer
-	mockEth.EXPECT().HeaderByNumber(mock.Anything, mock.Anything).Return(nil, errGenericNotFound).Once()
 
 	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
 	_, err = sut.SignTx(context.TODO(), to, tx)
