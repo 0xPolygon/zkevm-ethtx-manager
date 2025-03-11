@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/0xPolygon/zkevm-ethtx-manager/mocks"
 	"github.com/ethereum/go-ethereum"
@@ -109,4 +110,16 @@ func TestGetRevertMessage(t *testing.T) {
 	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
 	_, err := sut.GetRevertMessage(context.TODO(), tx)
 	require.ErrorIs(t, err, ethereum.NotFound)
+}
+
+func TestWaitTxToBeMined(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	sut := Client{
+		EthClient: mockEth,
+	}
+	mockEth.EXPECT().TransactionReceipt(mock.Anything, mock.Anything).Return(nil, errGenericNotFound)
+	to := common.HexToAddress("0x1")
+	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
+	_, err := sut.WaitTxToBeMined(context.TODO(), tx, time.Second)
+	require.Error(t, err)
 }
