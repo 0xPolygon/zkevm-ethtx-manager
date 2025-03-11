@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var genericErrNotFound = errors.New("not found")
+var errGenericNotFound = errors.New("not found")
 
 func TestExploratory(t *testing.T) {
 	t.Skip("skipping test")
@@ -35,7 +35,7 @@ func TestExploratory(t *testing.T) {
 
 func TestTranslateError(t *testing.T) {
 	require.ErrorIs(t, ethereum.NotFound, translateError(ethereum.NotFound))
-	require.ErrorIs(t, ethereum.NotFound, translateError(genericErrNotFound))
+	require.ErrorIs(t, ethereum.NotFound, translateError(errGenericNotFound))
 	anotherErr := errors.New("another error")
 	require.ErrorIs(t, anotherErr, translateError(anotherErr))
 }
@@ -47,7 +47,7 @@ func TestTGetTx(t *testing.T) {
 	}
 	ctx := context.TODO()
 
-	mockEth.EXPECT().TransactionByHash(mock.Anything, mock.Anything).Return(nil, false, genericErrNotFound).Once()
+	mockEth.EXPECT().TransactionByHash(mock.Anything, mock.Anything).Return(nil, false, errGenericNotFound).Once()
 	tx, isPending, err := sut.GetTx(ctx, common.HexToHash("0x1"))
 	require.Error(t, err)
 	require.Equal(t, "not found", err.Error())
@@ -61,7 +61,7 @@ func TestTGetTxReceipt(t *testing.T) {
 	sut := Client{
 		EthClient: mockEth,
 	}
-	mockEth.EXPECT().TransactionReceipt(mock.Anything, mock.Anything).Return(nil, genericErrNotFound).Once()
+	mockEth.EXPECT().TransactionReceipt(mock.Anything, mock.Anything).Return(nil, errGenericNotFound).Once()
 	receipt, err := sut.GetTxReceipt(context.TODO(), common.HexToHash("0x1"))
 	require.ErrorIs(t, err, ethereum.NotFound)
 	require.Nil(t, receipt)
@@ -72,7 +72,7 @@ func TestTGetLatestBlockNumber(t *testing.T) {
 	sut := Client{
 		EthClient: mockEth,
 	}
-	mockEth.EXPECT().HeaderByNumber(mock.Anything, mock.Anything).Return(nil, genericErrNotFound).Once()
+	mockEth.EXPECT().HeaderByNumber(mock.Anything, mock.Anything).Return(nil, errGenericNotFound).Once()
 	_, err := sut.GetLatestBlockNumber(context.TODO())
 	require.ErrorIs(t, err, ethereum.NotFound)
 }
