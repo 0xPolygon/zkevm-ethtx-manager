@@ -39,17 +39,19 @@ func TestTx(t *testing.T) {
 }
 
 func TestAddHistory(t *testing.T) {
-	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
+	tx := types.NewTransaction(0, common.HexToAddress("0x123456"), big.NewInt(100), 0, big.NewInt(10), nil)
 	mTx := MonitoredTx{
 		History: make(map[common.Hash]bool),
 	}
 
-	err := mTx.AddHistory(tx)
+	found, err := mTx.AddHistory(tx)
 	assert.NoError(t, err)
+	assert.False(t, found)
 
 	// Adding the same transaction again should return an error
-	err = mTx.AddHistory(tx)
-	assert.ErrorContains(t, err, "already exists")
+	found, err = mTx.AddHistory(tx)
+	assert.ErrorIs(t, err, ErrAlreadyExists)
+	assert.True(t, found)
 
 	// should have only one history
 	historySlice := mTx.HistoryHashSlice()

@@ -14,7 +14,8 @@ type Config struct {
 	MultiGasProvider bool `mapstructure:"MultiGasProvider"`
 	// Configuration for use Etherscan as used as gas provider, basically it needs the API-KEY
 	Etherscan etherscan.Config
-	// L1ChainID is the chain ID of the L1
+	// L1ChainID specifies the chain ID of the network to which transactions will be sent
+	// If set to 0, the chain ID will be fetched from the RPC endpoint
 	L1ChainID uint64 `mapstructure:"L1ChainID"`
 	// HTTPHeaders are the headers to be used in the HTTP requests
 	HTTPHeaders map[string]string `mapstructure:"HTTPHeaders"`
