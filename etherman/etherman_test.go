@@ -3,12 +3,16 @@ package etherman
 import (
 	"context"
 	"errors"
+	"math/big"
 	"os"
 	"testing"
 
 	"github.com/0xPolygon/zkevm-ethtx-manager/mocks"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -40,7 +44,7 @@ func TestTranslateError(t *testing.T) {
 	require.ErrorIs(t, anotherErr, translateError(anotherErr))
 }
 
-func TestTGetTx(t *testing.T) {
+func TestGetTx(t *testing.T) {
 	mockEth := mocks.NewEthereumClient(t)
 	sut := Client{
 		EthClient: mockEth,
@@ -56,7 +60,7 @@ func TestTGetTx(t *testing.T) {
 	require.Nil(t, tx)
 }
 
-func TestTGetTxReceipt(t *testing.T) {
+func TestGetTxReceipt(t *testing.T) {
 	mockEth := mocks.NewEthereumClient(t)
 	sut := Client{
 		EthClient: mockEth,
@@ -67,12 +71,43 @@ func TestTGetTxReceipt(t *testing.T) {
 	require.Nil(t, receipt)
 }
 
-func TestTGetLatestBlockNumber(t *testing.T) {
+func TestGetLatestBlockNumber(t *testing.T) {
 	mockEth := mocks.NewEthereumClient(t)
 	sut := Client{
 		EthClient: mockEth,
 	}
 	mockEth.EXPECT().HeaderByNumber(mock.Anything, mock.Anything).Return(nil, errGenericNotFound).Once()
 	_, err := sut.GetLatestBlockNumber(context.TODO())
+	require.ErrorIs(t, err, ethereum.NotFound)
+}
+
+func TestSignTx(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	sut := Client{
+		EthClient: mockEth,
+		auth:      make(map[common.Address]bind.TransactOpts),
+	}
+	to := common.HexToAddress("0x1")
+	privateKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	signer, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(1337))
+	require.NoError(t, err)
+	sut.auth[to] = *signer
+	mockEth.EXPECT().HeaderByNumber(mock.Anything, mock.Anything).Return(nil, errGenericNotFound).Once()
+
+	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
+	_, err = sut.SignTx(context.TODO(), to, tx)
+	require.NoError(t, err)
+}
+
+func TestGetRevertMessage(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	sut := Client{
+		EthClient: mockEth,
+	}
+	mockEth.EXPECT().TransactionReceipt(context.TODO(), mock.Anything).Return(nil, errGenericNotFound).Once()
+	to := common.HexToAddress("0x1")
+	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
+	_, err := sut.GetRevertMessage(context.TODO(), tx)
 	require.ErrorIs(t, err, ethereum.NotFound)
 }
