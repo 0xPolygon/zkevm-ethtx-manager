@@ -120,6 +120,7 @@ func TestWaitTxToBeMined(t *testing.T) {
 	mockEth.EXPECT().TransactionReceipt(mock.Anything, mock.Anything).Return(nil, errGenericNotFound)
 	to := common.HexToAddress("0x1")
 	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
-	_, err := sut.WaitTxToBeMined(context.TODO(), tx, time.Second)
-	require.Error(t, err)
+	res, err := sut.WaitTxToBeMined(context.TODO(), tx, time.Second)
+	require.False(t, res)
+	require.NoError(t, err)
 }
