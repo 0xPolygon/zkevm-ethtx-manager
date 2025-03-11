@@ -22,12 +22,13 @@ import (
 
 var (
 	// ErrNotFound is used when the object is not found
-	ErrNotFound = errors.New("not found")
+	ErrNotFound = ethereum.NotFound
 	// ErrPrivateKeyNotFound used when the provided sender does not have a private key registered to be used
 	ErrPrivateKeyNotFound = errors.New("can't find sender private key to sign tx")
 )
 
-type ethereumClient interface {
+// EthereumClient is an interface that combines all the ethereum client interfaces
+type EthereumClient interface {
 	ethereum.ChainReader
 	ethereum.ChainStateReader
 	ethereum.ContractCaller
@@ -42,7 +43,7 @@ type ethereumClient interface {
 
 // Client is a simple implementation of EtherMan.
 type Client struct {
-	EthClient    ethereumClient
+	EthClient    EthereumClient
 	cfg          Config
 	GasProviders externalGasProviders
 	auth         map[common.Address]bind.TransactOpts // empty in case of read-only client
@@ -104,17 +105,20 @@ func NewClient(cfg Config) (*Client, error) {
 
 // GetTx function get ethereum tx
 func (etherMan *Client) GetTx(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error) {
-	return etherMan.EthClient.TransactionByHash(ctx, txHash)
+	tx, isPending, err := etherMan.EthClient.TransactionByHash(ctx, txHash)
+	return tx, isPending, translateError(err)
 }
 
 // GetTxReceipt function gets ethereum tx receipt
 func (etherMan *Client) GetTxReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
-	return etherMan.EthClient.TransactionReceipt(ctx, txHash)
+	recepit, err := etherMan.EthClient.TransactionReceipt(ctx, txHash)
+	return recepit, translateError(err)
 }
 
 // GetLatestBlockNumber gets the latest block number from the ethereum
 func (etherMan *Client) GetLatestBlockNumber(ctx context.Context) (uint64, error) {
-	return etherMan.getBlockNumber(ctx, rpc.LatestBlockNumber)
+	number, err := etherMan.getBlockNumber(ctx, rpc.LatestBlockNumber)
+	return number, translateError(err)
 }
 
 // WaitTxToBeMined waits for an L1 tx to be mined. It will return error if the tx is reverted or timeout is exceeded
@@ -124,6 +128,7 @@ func (etherMan *Client) WaitTxToBeMined(
 	timeout time.Duration,
 ) (bool, error) {
 	err := WaitTxToBeMined(ctx, etherMan.EthClient, tx, timeout)
+	err = translateError(err)
 	if errors.Is(err, context.DeadlineExceeded) {
 		return false, nil
 	}
@@ -212,13 +217,23 @@ func (etherMan *Client) EstimateGasBlobTx(
 // CheckTxWasMined check if a tx was already mined
 func (etherMan *Client) CheckTxWasMined(ctx context.Context, txHash common.Hash) (bool, *types.Receipt, error) {
 	receipt, err := etherMan.EthClient.TransactionReceipt(ctx, txHash)
+	err = translateError(err)
 	if errors.Is(err, ethereum.NotFound) {
 		return false, nil, nil
 	} else if err != nil {
 		return false, nil, err
 	}
-
 	return true, receipt, nil
+}
+
+func translateError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if err.Error() == ethereum.NotFound.Error() {
+		return ethereum.NotFound
+	}
+	return err
 }
 
 // SignTx tries to sign a transaction accordingly to the provided sender
@@ -245,6 +260,7 @@ func (etherMan *Client) GetRevertMessage(ctx context.Context, tx *types.Transact
 	}
 
 	receipt, err := etherMan.GetTxReceipt(ctx, tx.Hash())
+	err = translateError(err)
 	if err != nil {
 		return "", err
 	}
