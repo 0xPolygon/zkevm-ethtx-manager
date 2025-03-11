@@ -2,6 +2,7 @@ package etherman
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -26,5 +27,11 @@ func TestExploratory(t *testing.T) {
 	require.ErrorIs(t, err, ethereum.NotFound)
 	require.False(t, isPending)
 	require.Nil(t, tx)
+}
 
+func TestTranslateError(t *testing.T) {
+	require.ErrorIs(t, ethereum.NotFound, translateError(ethereum.NotFound))
+	require.ErrorIs(t, ethereum.NotFound, translateError(errors.New("not found")))
+	anotherErr := errors.New("another error")
+	require.ErrorIs(t, anotherErr, translateError(anotherErr))
 }
