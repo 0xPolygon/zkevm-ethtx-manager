@@ -8,3 +8,7 @@ packages:
     interfaces:
       EthermanInterface:
         config:
+  github.com/0xPolygon/zkevm-ethtx-manager/etherman:
+      interfaces:
+        EthereumClient:
+          config:

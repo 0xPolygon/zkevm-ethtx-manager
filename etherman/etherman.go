@@ -27,7 +27,8 @@ var (
 	ErrPrivateKeyNotFound = errors.New("can't find sender private key to sign tx")
 )
 
-type ethereumClient interface {
+// EthereumClient is an interface that combines all the ethereum client interfaces
+type EthereumClient interface {
 	ethereum.ChainReader
 	ethereum.ChainStateReader
 	ethereum.ContractCaller
@@ -42,7 +43,7 @@ type ethereumClient interface {
 
 // Client is a simple implementation of EtherMan.
 type Client struct {
-	EthClient    ethereumClient
+	EthClient    EthereumClient
 	cfg          Config
 	GasProviders externalGasProviders
 	auth         map[common.Address]bind.TransactOpts // empty in case of read-only client
