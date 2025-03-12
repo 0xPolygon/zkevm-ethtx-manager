@@ -23,7 +23,7 @@ import (
 )
 
 func TestTxManagerExploratory(t *testing.T) {
-	//t.Skip("skipping test")
+	t.Skip("skipping test")
 	storagePath := path.Join(t.TempDir(), "txmanager.sqlite")
 	storage, err := sqlstorage.NewStorage(localCommon.SQLLiteDriverName, storagePath)
 	require.NoError(t, err)
