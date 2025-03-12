@@ -32,8 +32,8 @@ import (
 const failureIntervalInSeconds = 5
 
 var (
-	// ErrNotFound when the object is not found
-	ErrNotFound = errors.New("not found")
+	// ErrNotFound it's returned
+	ErrNotFound = types.ErrNotFound
 	// ErrAlreadyExists when the object already exists
 	ErrAlreadyExists = errors.New("already exists")
 
@@ -174,13 +174,15 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 // Add a transaction to be sent and monitored
 func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int,
 	data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar) (common.Hash, error) {
-	return c.add(ctx, to, value, data, gasOffset, sidecar, 0)
+	hash, err := c.add(ctx, to, value, data, gasOffset, sidecar, 0)
+	return hash, translateError(err)
 }
 
 // AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
 func (c *Client) AddWithGas(ctx context.Context, to *common.Address,
 	value *big.Int, data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar, gas uint64) (common.Hash, error) {
-	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
+	hash, err := c.add(ctx, to, value, data, gasOffset, sidecar, gas)
+	return hash, translateError(err)
 }
 
 func (c *Client) add(
@@ -341,12 +343,12 @@ func (c *Client) add(
 
 // Remove a transaction from the monitored txs
 func (c *Client) Remove(ctx context.Context, id common.Hash) error {
-	return c.storage.Remove(ctx, id)
+	return translateError(c.storage.Remove(ctx, id))
 }
 
 // RemoveAll removes all the monitored txs
 func (c *Client) RemoveAll(ctx context.Context) error {
-	return c.storage.Empty(ctx)
+	return translateError(c.storage.Empty(ctx))
 }
 
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
@@ -355,7 +357,7 @@ func (c *Client) ResultsByStatus(ctx context.Context,
 	statuses []types.MonitoredTxStatus) ([]types.MonitoredTxResult, error) {
 	mTxs, err := c.storage.GetByStatus(ctx, statuses)
 	if err != nil {
-		return nil, err
+		return nil, translateError(err)
 	}
 
 	results := make([]types.MonitoredTxResult, 0, len(mTxs))
@@ -363,7 +365,7 @@ func (c *Client) ResultsByStatus(ctx context.Context,
 	for _, mTx := range mTxs {
 		result, err := c.buildResult(ctx, mTx)
 		if err != nil {
-			return nil, err
+			return nil, translateError(err)
 		}
 		results = append(results, result)
 	}
@@ -372,13 +374,15 @@ func (c *Client) ResultsByStatus(ctx context.Context,
 }
 
 // Result returns the current result of the transaction execution with all the details
+// if not found returns ErrNotFound
 func (c *Client) Result(ctx context.Context, id common.Hash) (types.MonitoredTxResult, error) {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
-		return types.MonitoredTxResult{}, err
+		return types.MonitoredTxResult{}, translateError(err)
 	}
 
-	return c.buildResult(ctx, mTx)
+	res, err := c.buildResult(ctx, mTx)
+	return res, translateError(err)
 }
 
 // setStatusSafe sets the status of a monitored tx to types.MonitoredTxStatusSafe.
@@ -1109,4 +1113,19 @@ func CreateMonitoredTxResultLogger(mTxResult types.MonitoredTxResult) *log.Logge
 	return log.WithFields(
 		"monitoredTxId", mTxResult.ID.String(),
 	)
+}
+
+func translateError(err error) error {
+	if err == nil {
+		return nil
+	}
+	// If the error text is "not found" we return ErrNotFound
+	if err.Error() == ethereum.NotFound.Error() {
+		return ErrNotFound
+	}
+	// This is redundant, but just in case somebody change the error text
+	if err.Error() == types.ErrNotFound.Error() {
+		return ErrNotFound
+	}
+	return err
 }

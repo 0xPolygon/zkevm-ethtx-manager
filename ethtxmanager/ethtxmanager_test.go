@@ -3,19 +3,48 @@ package ethtxmanager
 import (
 	context "context"
 	"errors"
+	"fmt"
 	"math/big"
+	"os"
+	"path"
 	"testing"
 	"time"
 
 	localCommon "github.com/0xPolygon/zkevm-ethtx-manager/common"
+	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/sqlstorage"
 	"github.com/0xPolygon/zkevm-ethtx-manager/mocks"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	common "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+func TestTxManagerExploratory(t *testing.T) {
+	//t.Skip("skipping test")
+	storagePath := path.Join(t.TempDir(), "txmanager.sqlite")
+	storage, err := sqlstorage.NewStorage(localCommon.SQLLiteDriverName, storagePath)
+	require.NoError(t, err)
+	url := os.Getenv("L1URL")
+	ethClient, err := ethclient.Dial(url)
+	require.NoError(t, err)
+	ethermanClient := &etherman.Client{
+		EthClient: ethClient,
+	}
+	sut := &Client{
+		etherman: ethermanClient,
+		storage:  storage,
+	}
+	ctx := context.Background()
+	_, err = sut.Result(ctx, common.HexToHash("0x1"))
+	require.Error(t, err)
+	//fmt.Print(monitoredTx)
+	txs, err := sut.ResultsByStatus(ctx, nil)
+	require.NoError(t, err)
+	fmt.Print(txs)
+}
 
 func TestGetMonitoredTxnIteration(t *testing.T) {
 	ctx := context.Background()
