@@ -64,6 +64,12 @@ func TestRemove(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
+func TestResult(t *testing.T) {
+	testData := newTestData(t, false)
+	_, err := testData.sut.Result(testData.ctx, common.HexToHash("0x1"))
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
 func TestGetMonitoredTxnIteration(t *testing.T) {
 	ctx := context.Background()
 	etherman := mocks.NewEthermanInterface(t)
