@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var errGenericNotFound = errors.New("not found")
+
 func TestTxManagerExploratory(t *testing.T) {
 	t.Skip("skipping test")
 	storagePath := path.Join(t.TempDir(), "txmanager.sqlite")
@@ -46,10 +48,27 @@ func TestTxManagerExploratory(t *testing.T) {
 	fmt.Print(txs)
 }
 
+func TestAdd(t *testing.T) {
+	testData := newTestData(t, true)
+	to := common.HexToAddress("0x1")
+	testData.ethermanMock.EXPECT().SuggestedGasPrice(testData.ctx).Return(nil, errGenericNotFound)
+	_, err := testData.sut.Add(testData.ctx, &to, big.NewInt(1), []byte{}, 0, nil)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = testData.sut.AddWithGas(testData.ctx, &to, big.NewInt(1), []byte{}, 0, nil, 0)
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestRemove(t *testing.T) {
+	testData := newTestData(t, false)
+	err := testData.sut.Remove(testData.ctx, common.HexToHash("0x1"))
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
 func TestGetMonitoredTxnIteration(t *testing.T) {
 	ctx := context.Background()
 	etherman := mocks.NewEthermanInterface(t)
-	storage, err := sqlstorage.NewStorage(localCommon.SQLLiteDriverName, ":memory:")
+	storage, err := sqlstorage.NewStorage(localCommon.SQLLiteDriverName,
+		path.Join(t.TempDir(), "txmanager.sqlite"))
 	require.NoError(t, err)
 
 	client := &Client{
@@ -187,4 +206,36 @@ func compareTxsWithoutDates(t *testing.T, expected, actual types.MonitoredTx) {
 	actual.UpdatedAt = time.Time{}
 
 	require.Equal(t, expected, actual)
+}
+
+type testEthTxManagerData struct {
+	storageMock  *mocks.StorageInterface
+	ethermanMock *mocks.EthermanInterface
+	sut          *Client
+	ctx          context.Context
+}
+
+func newTestData(t *testing.T, useMockStorage bool) *testEthTxManagerData {
+	t.Helper()
+	var storageMock *mocks.StorageInterface
+	ethermanMock := mocks.NewEthermanInterface(t)
+	sut := &Client{
+		etherman: ethermanMock,
+	}
+	if useMockStorage {
+		storageMock := mocks.NewStorageInterface(t)
+		sut.storage = storageMock
+	} else {
+		storagePath := path.Join(t.TempDir(), "txmanager.sqlite")
+		storageInstance, err := sqlstorage.NewStorage(localCommon.SQLLiteDriverName, storagePath)
+		require.NoError(t, err)
+		sut.storage = storageInstance
+	}
+
+	return &testEthTxManagerData{
+		storageMock:  storageMock,
+		ethermanMock: ethermanMock,
+		sut:          sut,
+		ctx:          context.Background(),
+	}
 }

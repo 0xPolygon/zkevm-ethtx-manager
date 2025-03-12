@@ -6,6 +6,8 @@ outpkg: "mocks"
 packages:
   github.com/0xPolygon/zkevm-ethtx-manager/types:
     interfaces:
+      StorageInterface:
+        config: 
       EthermanInterface:
         config:
   github.com/0xPolygon/zkevm-ethtx-manager/etherman:
