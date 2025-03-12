@@ -32,6 +32,8 @@ import (
 const failureIntervalInSeconds = 5
 
 var (
+	// ErrNotFound it's returned
+	ErrNotFound = types.ErrNotFound
 	// ErrAlreadyExists when the object already exists
 	ErrAlreadyExists = errors.New("already exists")
 
@@ -172,13 +174,15 @@ func pendingL1Txs(URL string, from common.Address, httpHeaders map[string]string
 // Add a transaction to be sent and monitored
 func (c *Client) Add(ctx context.Context, to *common.Address, value *big.Int,
 	data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar) (common.Hash, error) {
-	return c.add(ctx, to, value, data, gasOffset, sidecar, 0)
+	hash, err := c.add(ctx, to, value, data, gasOffset, sidecar, 0)
+	return hash, translateError(err)
 }
 
 // AddWithGas adds a transaction to be sent and monitored with a defined gas to be used so it's not estimated
 func (c *Client) AddWithGas(ctx context.Context, to *common.Address,
 	value *big.Int, data []byte, gasOffset uint64, sidecar *ethTypes.BlobTxSidecar, gas uint64) (common.Hash, error) {
-	return c.add(ctx, to, value, data, gasOffset, sidecar, gas)
+	hash, err := c.add(ctx, to, value, data, gasOffset, sidecar, gas)
+	return hash, translateError(err)
 }
 
 func (c *Client) add(
@@ -195,7 +199,7 @@ func (c *Client) add(
 	// get gas price
 	gasPrice, err := c.suggestedGasPrice(ctx)
 	if err != nil {
-		err := fmt.Errorf("failed to get suggested gas price: %w", err)
+		err := fmt.Errorf("failed to get suggested gas price: %w", translateError(err))
 		log.Errorf(err.Error())
 		return common.Hash{}, err
 	}
@@ -247,9 +251,9 @@ func (c *Client) add(
 			gas, err = c.etherman.EstimateGasBlobTx(ctx, c.from, to, gasPrice, gasTipCap, value, data)
 			if err != nil {
 				if de, ok := err.(rpc.DataError); ok {
-					err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+					err = fmt.Errorf("%w (%v)", translateError(err), de.ErrorData())
 				}
-				err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", err, common.Bytes2Hex(data))
+				err := fmt.Errorf("failed to estimate gas blob tx: %w, data: %v", translateError(err), common.Bytes2Hex(data))
 				log.Error(err.Error())
 				log.Debugf(
 					"failed to estimate gas for blob tx: from: %v, to: %v, value: %v",
@@ -272,9 +276,9 @@ func (c *Client) add(
 		gas, err = c.etherman.EstimateGas(ctx, c.from, to, value, data)
 		if err != nil {
 			if de, ok := err.(rpc.DataError); ok {
-				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+				err = fmt.Errorf("%w (%v)", translateError(err), de.ErrorData())
 			}
-			err := fmt.Errorf("failed to estimate gas: %w, data: %v", err, common.Bytes2Hex(data))
+			err := fmt.Errorf("failed to estimate gas: %w, data: %v", translateError(err), common.Bytes2Hex(data))
 			log.Error(err.Error())
 			log.Debugf(
 				"failed to estimate gas for tx: from: %v, to: %v, value: %v",
@@ -326,7 +330,7 @@ func (c *Client) add(
 	// add to storage
 	err = c.storage.Add(ctx, mTx)
 	if err != nil {
-		err := fmt.Errorf("failed to add tx to get monitored: %w", err)
+		err := fmt.Errorf("failed to add tx to get monitored: %w", translateError(err))
 		log.Errorf(err.Error())
 		return common.Hash{}, err
 	}
@@ -339,12 +343,12 @@ func (c *Client) add(
 
 // Remove a transaction from the monitored txs
 func (c *Client) Remove(ctx context.Context, id common.Hash) error {
-	return c.storage.Remove(ctx, id)
+	return translateError(c.storage.Remove(ctx, id))
 }
 
 // RemoveAll removes all the monitored txs
 func (c *Client) RemoveAll(ctx context.Context) error {
-	return c.storage.Empty(ctx)
+	return translateError(c.storage.Empty(ctx))
 }
 
 // ResultsByStatus returns all the results for all the monitored txs matching the provided statuses
@@ -353,7 +357,7 @@ func (c *Client) ResultsByStatus(ctx context.Context,
 	statuses []types.MonitoredTxStatus) ([]types.MonitoredTxResult, error) {
 	mTxs, err := c.storage.GetByStatus(ctx, statuses)
 	if err != nil {
-		return nil, err
+		return nil, translateError(err)
 	}
 
 	results := make([]types.MonitoredTxResult, 0, len(mTxs))
@@ -361,7 +365,7 @@ func (c *Client) ResultsByStatus(ctx context.Context,
 	for _, mTx := range mTxs {
 		result, err := c.buildResult(ctx, mTx)
 		if err != nil {
-			return nil, err
+			return nil, translateError(err)
 		}
 		results = append(results, result)
 	}
@@ -370,13 +374,15 @@ func (c *Client) ResultsByStatus(ctx context.Context,
 }
 
 // Result returns the current result of the transaction execution with all the details
+// if not found returns ErrNotFound
 func (c *Client) Result(ctx context.Context, id common.Hash) (types.MonitoredTxResult, error) {
 	mTx, err := c.storage.Get(ctx, id)
 	if err != nil {
-		return types.MonitoredTxResult{}, err
+		return types.MonitoredTxResult{}, translateError(err)
 	}
 
-	return c.buildResult(ctx, mTx)
+	res, err := c.buildResult(ctx, mTx)
+	return res, translateError(err)
 }
 
 // setStatusSafe sets the status of a monitored tx to types.MonitoredTxStatusSafe.
@@ -484,7 +490,7 @@ func (c *Client) Stop() {
 func (c *Client) monitorTxs(ctx context.Context) error {
 	iterations, err := c.getMonitoredTxnIteration(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get monitored txs: %v", err)
+		return fmt.Errorf("failed to get monitored txs: %w", translateError(err))
 	}
 
 	log.Debugf("found %v monitored tx to process", len(iterations))
@@ -514,7 +520,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 	statusesFilter := []types.MonitoredTxStatus{types.MonitoredTxStatusMined}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
-		return fmt.Errorf("failed to get mined monitored txs: %v", err)
+		return fmt.Errorf("failed to get mined monitored txs: %w", translateError(err))
 	}
 
 	log.Debugf("found %v mined monitored tx to process", len(mTxs))
@@ -524,7 +530,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 		// Overwrite the number of blocks to consider a tx as safe
 		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get latest block number: %v", err)
+			return fmt.Errorf("failed to get latest block number: %w", translateError(err))
 		}
 
 		safeBlockNumber = currentBlockNumber - c.cfg.SafeStatusL1NumberOfBlocks
@@ -543,7 +549,7 @@ func (c *Client) waitMinedTxToBeSafe(ctx context.Context) error {
 			mTx.Status = types.MonitoredTxStatusSafe
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
-				return fmt.Errorf("failed to update mined monitored tx: %v", err)
+				return fmt.Errorf("failed to update mined monitored tx: %w", translateError(err))
 			}
 		}
 	}
@@ -557,7 +563,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 	statusesFilter := []types.MonitoredTxStatus{types.MonitoredTxStatusSafe}
 	mTxs, err := c.storage.GetByStatus(ctx, statusesFilter)
 	if err != nil {
-		return fmt.Errorf("failed to get safe monitored txs: %v", err)
+		return fmt.Errorf("failed to get safe monitored txs: %w", translateError(err))
 	}
 
 	log.Debugf("found %v safe monitored tx to process", len(mTxs))
@@ -567,7 +573,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 		// Overwrite the number of blocks to consider a tx as finalized
 		currentBlockNumber, err := c.etherman.GetLatestBlockNumber(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get latest block number: %v", err)
+			return fmt.Errorf("failed to get latest block number: %w", translateError(err))
 		}
 
 		finaLizedBlockNumber = currentBlockNumber - c.cfg.FinalizedStatusL1NumberOfBlocks
@@ -575,7 +581,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 		// Get Network Default value
 		finaLizedBlockNumber, err = l1_check_block.L1FinalizedFetch.BlockNumber(ctx, c.etherman)
 		if err != nil {
-			return fmt.Errorf("failed to get finalized block number: %v", err)
+			return fmt.Errorf("failed to get finalized block number: %w", translateError(err))
 		}
 	}
 
@@ -586,7 +592,7 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 			mTx.Status = types.MonitoredTxStatusFinalized
 			err := c.storage.Update(ctx, mTx)
 			if err != nil {
-				return fmt.Errorf("failed to update safe monitored tx: %v", err)
+				return fmt.Errorf("failed to update safe monitored tx: %w", translateError(err))
 			}
 		}
 	}
@@ -773,7 +779,7 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 	// get gas price
 	gasPrice, err := c.suggestedGasPrice(ctx)
 	if err != nil {
-		err := fmt.Errorf("failed to get suggested gas price: %w", err)
+		err := fmt.Errorf("failed to get suggested gas price: %w", translateError(err))
 		mTxLogger.Errorf(err.Error())
 		return err
 	}
@@ -838,9 +844,9 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 		gas, err = c.etherman.EstimateGasBlobTx(ctx, mTx.From, mTx.To, mTx.GasPrice, mTx.GasTipCap, mTx.Value, mTx.Data)
 		if err != nil {
 			if de, ok := err.(rpc.DataError); ok {
-				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
+				err = fmt.Errorf("%w (%v)", translateError(err), de.ErrorData())
 			}
-			err := fmt.Errorf("failed to estimate gas blob tx: %w", err)
+			err := fmt.Errorf("failed to estimate gas blob tx: %w", translateError(err))
 			mTxLogger.Errorf(err.Error())
 			return err
 		}
@@ -850,7 +856,7 @@ func (c *Client) reviewMonitoredTxGas(ctx context.Context, mTx *monitoredTxnIter
 			if de, ok := err.(rpc.DataError); ok {
 				err = fmt.Errorf("%w (%v)", err, de.ErrorData())
 			}
-			err := fmt.Errorf("failed to estimate gas: %w", err)
+			err := fmt.Errorf("failed to estimate gas: %w", translateError(err))
 			mTxLogger.Errorf(err.Error())
 			return err
 		}
@@ -875,7 +881,7 @@ func (c *Client) getMonitoredTxnIteration(ctx context.Context) ([]*monitoredTxnI
 	txsToUpdate, err := c.storage.GetByStatus(ctx,
 		[]types.MonitoredTxStatus{types.MonitoredTxStatusCreated, types.MonitoredTxStatusSent})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get txs to update nonces: %w", err)
+		return nil, fmt.Errorf("failed to get txs to update nonces: %w", translateError(err))
 	}
 
 	iterations := make([]*monitoredTxnIteration, 0, len(txsToUpdate))
@@ -906,7 +912,7 @@ func (c *Client) getMonitoredTxnIteration(ctx context.Context) ([]*monitoredTxnI
 		iteration.Nonce = nonce
 		err = c.storage.Update(ctx, tx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to update nonce for tx %v: %w", tx.ID.String(), err)
+			return nil, fmt.Errorf("failed to update nonce for tx %v: %w", tx.ID.String(), translateError(err))
 		}
 
 		senderNonces[tx.From]++
@@ -1107,4 +1113,19 @@ func CreateMonitoredTxResultLogger(mTxResult types.MonitoredTxResult) *log.Logge
 	return log.WithFields(
 		"monitoredTxId", mTxResult.ID.String(),
 	)
+}
+
+func translateError(err error) error {
+	if err == nil {
+		return nil
+	}
+	// If the error text is "not found" we return ErrNotFound
+	if err.Error() == ethereum.NotFound.Error() {
+		return ErrNotFound
+	}
+	// This is redundant, but just in case somebody change the error text
+	if err.Error() == types.ErrNotFound.Error() {
+		return ErrNotFound
+	}
+	return err
 }
