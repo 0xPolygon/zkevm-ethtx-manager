@@ -13,11 +13,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// EthermanAuth is a struct that holds the authorizations
 type EthermanAuth struct {
 	chainID uint64
 	auth    map[common.Address]bind.TransactOpts // empty in case of read-only client
 }
 
+// NewEthermanAuth creates a new instance of EthermanAuth
 func NewEthermanAuth(chainID uint64) *EthermanAuth {
 	return &EthermanAuth{
 		chainID: chainID,

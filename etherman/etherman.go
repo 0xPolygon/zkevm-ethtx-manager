@@ -39,6 +39,7 @@ type EthereumClient interface {
 	bind.DeployBackend
 }
 
+// EthermanSigner is an interface that combines all the signer interfaces
 type EthermanSigner interface {
 	SignTx(ctx context.Context, sender common.Address, tx *types.Transaction) (*types.Transaction, error)
 	PublicAddress() ([]common.Address, error)
@@ -302,6 +303,7 @@ func (etherMan *Client) SignTx(
 	return etherMan.auth.SignTx(ctx, sender, tx)
 }
 
+// PublicAddress returns the public addresses of the signers
 func (etherMan *Client) PublicAddress() ([]common.Address, error) {
 	return etherMan.auth.PublicAddress()
 }

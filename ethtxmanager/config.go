@@ -4,7 +4,6 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/config/types"
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
-
 	signertypes "github.com/agglayer/go_signer/signer/types"
 )
 
