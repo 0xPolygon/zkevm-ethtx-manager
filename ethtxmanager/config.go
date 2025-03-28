@@ -4,6 +4,8 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/config/types"
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
+
+	signertypes "github.com/agglayer/go_signer/signer/types"
 )
 
 // Config is configuration for ethereum transaction manager
@@ -22,7 +24,7 @@ type Config struct {
 
 	// PrivateKeys defines all the key store files that are going
 	// to be read in order to provide the private keys to sign the L1 txs
-	PrivateKeys []types.KeystoreFileConfig `mapstructure:"PrivateKeys"`
+	PrivateKeys []signertypes.SignerConfig `mapstructure:"PrivateKeys"`
 
 	// ForcedGas is the amount of gas to be forced in case of gas estimation error
 	ForcedGas uint64 `mapstructure:"ForcedGas"`

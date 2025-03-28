@@ -14,3 +14,7 @@ packages:
       interfaces:
         EthereumClient:
           config:
+  github.com/agglayer/go_signer/signer/types:
+    interfaces:
+      Signer:
+        config:

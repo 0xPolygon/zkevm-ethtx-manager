@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"math/big"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/etherscan"
 	"github.com/0xPolygon/zkevm-ethtx-manager/etherman/ethgasstation"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
+	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -41,12 +39,17 @@ type EthereumClient interface {
 	bind.DeployBackend
 }
 
+type EthermanSigner interface {
+	SignTx(ctx context.Context, sender common.Address, tx *types.Transaction) (*types.Transaction, error)
+	PublicAddress() ([]common.Address, error)
+}
+
 // Client is a simple implementation of EtherMan.
 type Client struct {
 	EthClient    EthereumClient
 	cfg          Config
 	GasProviders externalGasProviders
-	auth         map[common.Address]bind.TransactOpts // empty in case of read-only client
+	auth         EthermanSigner // empty in case of read-only client
 }
 
 type externalGasProviders struct {
@@ -55,7 +58,7 @@ type externalGasProviders struct {
 }
 
 // NewClient creates a new etherman.
-func NewClient(cfg Config) (*Client, error) {
+func NewClient(cfg Config, signersConfig []signertypes.SignerConfig) (*Client, error) {
 	if cfg.URL == "" {
 		return nil, errors.New("Ethereum node URL cannot be empty")
 	}
@@ -92,6 +95,10 @@ func NewClient(cfg Config) (*Client, error) {
 		}
 		gProviders = append(gProviders, ethgasstation.NewEthGasStationService())
 	}
+	auth, err := NewEthermanSigners(context.Background(), cfg.L1ChainID, signersConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Client{EthClient: ethClient,
 		cfg: cfg,
@@ -99,7 +106,7 @@ func NewClient(cfg Config) (*Client, error) {
 			MultiGasProvider: cfg.MultiGasProvider,
 			Providers:        gProviders,
 		},
-		auth: make(map[common.Address]bind.TransactOpts),
+		auth: auth,
 	}, nil
 }
 
@@ -236,23 +243,6 @@ func translateError(err error) error {
 	return err
 }
 
-// SignTx tries to sign a transaction accordingly to the provided sender
-func (etherMan *Client) SignTx(
-	ctx context.Context,
-	sender common.Address,
-	tx *types.Transaction,
-) (*types.Transaction, error) {
-	auth, err := etherMan.getAuthByAddress(sender)
-	if err == ErrNotFound {
-		return nil, ErrPrivateKeyNotFound
-	}
-	signedTx, err := auth.Signer(auth.From, tx)
-	if err != nil {
-		return nil, err
-	}
-	return signedTx, nil
-}
-
 // GetRevertMessage tries to get a revert message of a transaction
 func (etherMan *Client) GetRevertMessage(ctx context.Context, tx *types.Transaction) (string, error) {
 	if tx == nil {
@@ -273,68 +263,6 @@ func (etherMan *Client) GetRevertMessage(ctx context.Context, tx *types.Transact
 		return revertMessage, nil
 	}
 	return "", nil
-}
-
-// getAuthByAddress tries to get an authorization from the authorizations map
-func (etherMan *Client) getAuthByAddress(addr common.Address) (bind.TransactOpts, error) {
-	auth, found := etherMan.auth[addr]
-	if !found {
-		return bind.TransactOpts{}, ErrNotFound
-	}
-	return auth, nil
-}
-
-// AddOrReplaceAuth adds an authorization or replace an existent one to the same account
-func (etherMan *Client) AddOrReplaceAuth(auth bind.TransactOpts) error {
-	log.Infof("added or replaced authorization for address: %v", auth.From.String())
-	etherMan.auth[auth.From] = auth
-	return nil
-}
-
-// LoadAuthFromKeyStore loads an authorization from a key store file
-func (etherMan *Client) LoadAuthFromKeyStore(path, password string) (*bind.TransactOpts, error) {
-	auth, err := newAuthFromKeystore(path, password, etherMan.cfg.L1ChainID)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Infof("loaded authorization for address: %v", auth.From.String())
-	etherMan.auth[auth.From] = auth
-	return &auth, nil
-}
-
-// newKeyFromKeystore creates an instance of a keystore key from a keystore file
-func newKeyFromKeystore(path, password string) (*keystore.Key, error) {
-	if path == "" && password == "" {
-		return nil, nil
-	}
-	keystoreEncrypted, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("decrypting key from: %v", path)
-	key, err := keystore.DecryptKey(keystoreEncrypted, password)
-	if err != nil {
-		return nil, err
-	}
-	return key, nil
-}
-
-// newAuthFromKeystore an authorization instance from a keystore file
-func newAuthFromKeystore(path, password string, chainID uint64) (bind.TransactOpts, error) {
-	log.Infof("reading key from: %v", path)
-	key, err := newKeyFromKeystore(path, password)
-	if err != nil {
-		return bind.TransactOpts{}, err
-	}
-	if key == nil {
-		return bind.TransactOpts{}, nil
-	}
-	auth, err := bind.NewKeyedTransactorWithChainID(key.PrivateKey, new(big.Int).SetUint64(chainID))
-	if err != nil {
-		return bind.TransactOpts{}, err
-	}
-	return *auth, nil
 }
 
 // getBlockNumber gets the block header by the provided block number from the ethereum
@@ -363,4 +291,17 @@ func (etherMan *Client) GetSuggestGasTipCap(ctx context.Context) (*big.Int, erro
 // nil, the latest known header is returned.
 func (etherMan *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	return etherMan.EthClient.HeaderByNumber(ctx, number)
+}
+
+// SignTx tries to sign a transaction accordingly to the provided sender
+func (etherMan *Client) SignTx(
+	ctx context.Context,
+	sender common.Address,
+	tx *types.Transaction,
+) (*types.Transaction, error) {
+	return etherMan.auth.SignTx(ctx, sender, tx)
+}
+
+func (etherMan *Client) PublicAddress() ([]common.Address, error) {
+	return etherMan.auth.PublicAddress()
 }

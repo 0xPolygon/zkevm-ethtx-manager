@@ -11,6 +11,7 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager"
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	coreTypes "github.com/0xPolygon/zkevm-ethtx-manager/types"
+	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 )
@@ -33,7 +34,10 @@ func main() {
 		StoragePath:                     "ethtxmanager-persistence.db",
 		ReadPendingL1Txs:                false,
 		Log:                             log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
-		PrivateKeys:                     []types.KeystoreFileConfig{{Path: "test.keystore", Password: "testonly"}},
+		PrivateKeys: []signertypes.SignerConfig{{
+			Method: signertypes.MethodLocal,
+			Config: map[string]interface{}{"Path": "test.keystore", "Password": "testonly"},
+		}},
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
 			HTTPHeaders:      map[string]string{},

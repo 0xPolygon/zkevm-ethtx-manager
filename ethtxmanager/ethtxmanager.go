@@ -69,17 +69,7 @@ type l1Tx struct {
 
 // New creates new eth tx manager
 func New(cfg Config) (*Client, error) {
-	etherman, err := etherman.NewClient(cfg.Etherman)
-	if err != nil {
-		return nil, err
-	}
-
-	auth, err := etherman.LoadAuthFromKeyStore(cfg.PrivateKeys[0].Path, cfg.PrivateKeys[0].Password)
-	if err != nil {
-		return nil, err
-	}
-
-	err = etherman.AddOrReplaceAuth(*auth)
+	etherman, err := etherman.NewClient(cfg.Etherman, cfg.PrivateKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +79,19 @@ func New(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
+	publicAddr, err := etherman.PublicAddress()
+	if err != nil {
+		return nil, fmt.Errorf("ethtxmanager error getting public address: %w", err)
+	}
+	if len(publicAddr) == 0 {
+		return nil, fmt.Errorf("ethtxmanager error getting public address: no public address found")
+	}
+
 	client := Client{
 		cfg:      cfg,
 		etherman: etherman,
 		storage:  storage,
-		from:     auth.From,
+		from:     publicAddr[0],
 	}
 
 	log.Init(cfg.Log)
