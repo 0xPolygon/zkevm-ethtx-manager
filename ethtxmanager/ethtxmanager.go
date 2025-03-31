@@ -19,6 +19,7 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer/l1_check_block"
+	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -67,9 +68,13 @@ type l1Tx struct {
 	Data     string `json:"input"`
 }
 
+var ettxmanagerEthermanFactoryFunc = func(cfg etherman.Config, signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
+	return etherman.NewClient(cfg, signersConfig)
+}
+
 // New creates new eth tx manager
 func New(cfg Config) (*Client, error) {
-	etherman, err := etherman.NewClient(cfg.Etherman, cfg.PrivateKeys)
+	etherman, err := ettxmanagerEthermanFactoryFunc(cfg.Etherman, cfg.PrivateKeys)
 	if err != nil {
 		return nil, err
 	}

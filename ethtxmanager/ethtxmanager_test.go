@@ -15,6 +15,7 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/ethtxmanager/sqlstorage"
 	"github.com/0xPolygon/zkevm-ethtx-manager/mocks"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
+	signertypes "github.com/agglayer/go_signer/signer/types"
 	common "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -200,6 +201,17 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 			etherman.AssertExpectations(t)
 		})
 	}
+}
+
+func TestNew(t *testing.T) {
+	mockEtherman := mocks.NewEthermanInterface(t)
+	ettxmanagerEthermanFactoryFunc = func(cfg etherman.Config, signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
+		return mockEtherman, nil
+	}
+	mockEtherman.EXPECT().PublicAddress().Return([]common.Address{common.HexToAddress("0x1")}, nil).Once()
+	sut, err := New(Config{})
+	require.NoError(t, err)
+	require.NotNil(t, sut)
 }
 
 // compareTxsWithout dates compares the two MonitoredTx instances, but without dates, since some functions are altering it
