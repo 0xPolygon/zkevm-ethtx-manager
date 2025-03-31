@@ -28,7 +28,7 @@ func TestNewEthermanSigners(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, got)
 
-	got, err = NewEthermanSigners(ctx, chainID, []signertypes.SignerConfig{
+	_, err = NewEthermanSigners(ctx, chainID, []signertypes.SignerConfig{
 		{
 			Method: "local",
 		},

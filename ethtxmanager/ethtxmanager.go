@@ -68,7 +68,9 @@ type l1Tx struct {
 	Data     string `json:"input"`
 }
 
-var ettxmanagerEthermanFactoryFunc = func(cfg etherman.Config, signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
+// This var is for be able to test New function that require to create a Mock of Etherman
+var ettxmanagerEthermanFactoryFunc = func(cfg etherman.Config,
+	signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
 	return etherman.NewClient(cfg, signersConfig)
 }
 

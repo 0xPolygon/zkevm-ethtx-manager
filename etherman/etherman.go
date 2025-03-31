@@ -62,6 +62,7 @@ type externalGasProviders struct {
 	Providers        []ethereum.GasPricer
 }
 
+// This var is for be able to test NewClient function that require to create a mock
 var ethclientFactoryFunc = func(rawurl string) (EthereumClient, error) {
 	return ethclient.Dial(rawurl)
 }
