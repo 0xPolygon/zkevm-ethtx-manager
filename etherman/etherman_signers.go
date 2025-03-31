@@ -33,18 +33,6 @@ func NewEthermanSigners(ctx context.Context, chainID uint64,
 	return &res, nil
 }
 
-// getAuthByAddress tries to get an authorization from the authorizations map
-func (s *EthermanSigners) getSignerByAddress(addr common.Address) (signertypes.Signer, error) {
-	if s == nil {
-		return nil, ErrPrivateKeyNotFound
-	}
-	signer, found := s.signers[addr]
-	if !found {
-		return nil, ErrPrivateKeyNotFound
-	}
-	return signer, nil
-}
-
 // PublicAddress returns the public addresses of the signers
 func (s *EthermanSigners) PublicAddress() ([]common.Address, error) {
 	if s == nil {
@@ -66,4 +54,16 @@ func (s *EthermanSigners) SignTx(ctx context.Context, sender common.Address,
 		return nil, err
 	}
 	return signer.SignTx(ctx, tx)
+}
+
+// getAuthByAddress tries to get an authorization from the authorizations map
+func (s *EthermanSigners) getSignerByAddress(addr common.Address) (signertypes.Signer, error) {
+	if s == nil {
+		return nil, ErrObjectIsNil
+	}
+	signer, found := s.signers[addr]
+	if !found {
+		return nil, ErrPrivateKeyNotFound
+	}
+	return signer, nil
 }

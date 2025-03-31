@@ -23,6 +23,7 @@ var (
 	ErrNotFound = ethereum.NotFound
 	// ErrPrivateKeyNotFound used when the provided sender does not have a private key registered to be used
 	ErrPrivateKeyNotFound = errors.New("can't find sender private key to sign tx")
+	ErrObjectIsNil        = errors.New("object is nil")
 )
 
 // EthereumClient is an interface that combines all the ethereum client interfaces
