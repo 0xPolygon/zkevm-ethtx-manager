@@ -23,13 +23,15 @@ var (
 	ErrNotFound = ethereum.NotFound
 	// ErrPrivateKeyNotFound used when the provided sender does not have a private key registered to be used
 	ErrPrivateKeyNotFound = errors.New("can't find sender private key to sign tx")
-	ErrObjectIsNil        = errors.New("object is nil")
+	// ErrObjectIsNil used when the object is nil
+	ErrObjectIsNil = errors.New("object is nil")
 )
 
 // EthereumClient is an interface that combines all the ethereum client interfaces
 type EthereumClient interface {
 	ethereum.ChainReader
 	ethereum.ChainStateReader
+	ethereum.ChainIDReader
 	ethereum.ContractCaller
 	ethereum.GasEstimator
 	ethereum.GasPricer
@@ -38,6 +40,7 @@ type EthereumClient interface {
 	ethereum.TransactionReader
 	ethereum.TransactionSender
 	bind.DeployBackend
+	Client() *rpc.Client
 }
 
 // EthermanSigner is an interface that combines all the signer interfaces
@@ -59,6 +62,10 @@ type externalGasProviders struct {
 	Providers        []ethereum.GasPricer
 }
 
+var ethclientFactoryFunc = func(rawurl string) (EthereumClient, error) {
+	return ethclient.Dial(rawurl)
+}
+
 // NewClient creates a new etherman.
 func NewClient(cfg Config, signersConfig []signertypes.SignerConfig) (*Client, error) {
 	if cfg.URL == "" {
@@ -66,7 +73,8 @@ func NewClient(cfg Config, signersConfig []signertypes.SignerConfig) (*Client, e
 	}
 
 	// Connect to ethereum node
-	ethClient, err := ethclient.Dial(cfg.URL)
+	ethClient, err := ethclientFactoryFunc(cfg.URL)
+	//ethClient, err := ethclient.Dial(cfg.URL)
 	if err != nil {
 		log.Errorf("error connecting to %s: %+v", cfg.URL, err)
 		return nil, err

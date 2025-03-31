@@ -139,3 +139,33 @@ func TestCheckTxWasMined(t *testing.T) {
 	require.False(t, res)
 	require.NoError(t, err)
 }
+
+func TestNewClient(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	ethclientFactoryFunc = func(url string) (EthereumClient, error) {
+		return mockEth, nil
+	}
+	mockEth.EXPECT().ChainID(mock.Anything).Return(big.NewInt(1), nil)
+	sut, err := NewClient(Config{
+		URL: "http://localhost:8545",
+	}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, sut)
+}
+
+func TestPublicAddress(t *testing.T) {
+	mockSigner := mocks.NewSigner(t)
+	senderAddr := common.HexToAddress("0x1")
+	signers := &EthermanSigners{
+		signers: map[common.Address]signertypes.Signer{
+			senderAddr: mockSigner,
+		},
+	}
+	sut := Client{
+		auth: signers,
+	}
+	mockSigner.EXPECT().PublicAddress().Return(senderAddr)
+	addr, err := sut.PublicAddress()
+	require.NoError(t, err)
+	require.Len(t, addr, 1)
+}
