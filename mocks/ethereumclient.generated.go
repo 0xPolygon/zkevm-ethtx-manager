@@ -12,6 +12,8 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
+	rpc "github.com/ethereum/go-ethereum/rpc"
+
 	types "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -262,6 +264,111 @@ func (_c *EthereumClient_CallContract_Call) Return(_a0 []byte, _a1 error) *Ether
 }
 
 func (_c *EthereumClient_CallContract_Call) RunAndReturn(run func(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error)) *EthereumClient_CallContract_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ChainID provides a mock function with given fields: ctx
+func (_m *EthereumClient) ChainID(ctx context.Context) (*big.Int, error) {
+	ret := _m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ChainID")
+	}
+
+	var r0 *big.Int
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) (*big.Int, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) *big.Int); ok {
+		r0 = rf(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*big.Int)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// EthereumClient_ChainID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ChainID'
+type EthereumClient_ChainID_Call struct {
+	*mock.Call
+}
+
+// ChainID is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *EthereumClient_Expecter) ChainID(ctx interface{}) *EthereumClient_ChainID_Call {
+	return &EthereumClient_ChainID_Call{Call: _e.mock.On("ChainID", ctx)}
+}
+
+func (_c *EthereumClient_ChainID_Call) Run(run func(ctx context.Context)) *EthereumClient_ChainID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context))
+	})
+	return _c
+}
+
+func (_c *EthereumClient_ChainID_Call) Return(_a0 *big.Int, _a1 error) *EthereumClient_ChainID_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *EthereumClient_ChainID_Call) RunAndReturn(run func(context.Context) (*big.Int, error)) *EthereumClient_ChainID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Client provides a mock function with no fields
+func (_m *EthereumClient) Client() *rpc.Client {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Client")
+	}
+
+	var r0 *rpc.Client
+	if rf, ok := ret.Get(0).(func() *rpc.Client); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*rpc.Client)
+		}
+	}
+
+	return r0
+}
+
+// EthereumClient_Client_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Client'
+type EthereumClient_Client_Call struct {
+	*mock.Call
+}
+
+// Client is a helper method to define mock.On call
+func (_e *EthereumClient_Expecter) Client() *EthereumClient_Client_Call {
+	return &EthereumClient_Client_Call{Call: _e.mock.On("Client")}
+}
+
+func (_c *EthereumClient_Client_Call) Run(run func()) *EthereumClient_Client_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *EthereumClient_Client_Call) Return(_a0 *rpc.Client) *EthereumClient_Client_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *EthereumClient_Client_Call) RunAndReturn(run func() *rpc.Client) *EthereumClient_Client_Call {
 	_c.Call.Return(run)
 	return _c
 }

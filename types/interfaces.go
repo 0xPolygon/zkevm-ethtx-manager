@@ -96,6 +96,9 @@ type EthermanInterface interface {
 	// HeaderByNumber is an alias for GetHeaderByNumber. It retrieves the block header for a specific block number.
 	// Returns the block header and an error if it cannot be retrieved.
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
+
+	// PublicAddress returns the public addresses of the signers
+	PublicAddress() ([]common.Address, error)
 }
 
 // StorageInterface defines the methods required to interact with

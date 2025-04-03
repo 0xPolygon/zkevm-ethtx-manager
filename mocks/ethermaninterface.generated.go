@@ -744,6 +744,63 @@ func (_c *EthermanInterface_PendingNonce_Call) RunAndReturn(run func(context.Con
 	return _c
 }
 
+// PublicAddress provides a mock function with no fields
+func (_m *EthermanInterface) PublicAddress() ([]common.Address, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for PublicAddress")
+	}
+
+	var r0 []common.Address
+	var r1 error
+	if rf, ok := ret.Get(0).(func() ([]common.Address, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() []common.Address); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]common.Address)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// EthermanInterface_PublicAddress_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PublicAddress'
+type EthermanInterface_PublicAddress_Call struct {
+	*mock.Call
+}
+
+// PublicAddress is a helper method to define mock.On call
+func (_e *EthermanInterface_Expecter) PublicAddress() *EthermanInterface_PublicAddress_Call {
+	return &EthermanInterface_PublicAddress_Call{Call: _e.mock.On("PublicAddress")}
+}
+
+func (_c *EthermanInterface_PublicAddress_Call) Run(run func()) *EthermanInterface_PublicAddress_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *EthermanInterface_PublicAddress_Call) Return(_a0 []common.Address, _a1 error) *EthermanInterface_PublicAddress_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *EthermanInterface_PublicAddress_Call) RunAndReturn(run func() ([]common.Address, error)) *EthermanInterface_PublicAddress_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SendTx provides a mock function with given fields: ctx, tx
 func (_m *EthermanInterface) SendTx(ctx context.Context, tx *types.Transaction) error {
 	ret := _m.Called(ctx, tx)

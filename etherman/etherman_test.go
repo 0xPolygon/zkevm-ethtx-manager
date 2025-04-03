@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"github.com/0xPolygon/zkevm-ethtx-manager/mocks"
+	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -84,19 +83,21 @@ func TestGetLatestBlockNumber(t *testing.T) {
 
 func TestSignTx(t *testing.T) {
 	mockEth := mocks.NewEthereumClient(t)
+	mockSigner := mocks.NewSigner(t)
+	to := common.HexToAddress("0x1")
+	ethSigners := &EthermanSigners{
+		chainID: 1337,
+		signers: map[common.Address]signertypes.Signer{
+			to: mockSigner,
+		},
+	}
 	sut := Client{
 		EthClient: mockEth,
-		auth:      make(map[common.Address]bind.TransactOpts),
+		auth:      ethSigners,
 	}
-	to := common.HexToAddress("0x1")
-	privateKey, err := crypto.GenerateKey()
-	require.NoError(t, err)
-	signer, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(1337))
-	require.NoError(t, err)
-	sut.auth[to] = *signer
-
+	mockSigner.EXPECT().SignTx(context.TODO(), mock.Anything).Return(nil, nil).Once()
 	tx := ethTypes.NewTx(&ethTypes.LegacyTx{To: &to, Nonce: uint64(0), Value: big.NewInt(0), Data: []byte{}})
-	_, err = sut.SignTx(context.TODO(), to, tx)
+	_, err := sut.SignTx(context.TODO(), to, tx)
 	require.NoError(t, err)
 }
 
@@ -137,4 +138,34 @@ func TestCheckTxWasMined(t *testing.T) {
 	require.Nil(t, receipt)
 	require.False(t, res)
 	require.NoError(t, err)
+}
+
+func TestNewClient(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	ethclientFactoryFunc = func(url string) (EthereumClient, error) {
+		return mockEth, nil
+	}
+	mockEth.EXPECT().ChainID(mock.Anything).Return(big.NewInt(1), nil)
+	sut, err := NewClient(Config{
+		URL: "http://localhost:8545",
+	}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, sut)
+}
+
+func TestPublicAddress(t *testing.T) {
+	mockSigner := mocks.NewSigner(t)
+	senderAddr := common.HexToAddress("0x1")
+	signers := &EthermanSigners{
+		signers: map[common.Address]signertypes.Signer{
+			senderAddr: mockSigner,
+		},
+	}
+	sut := Client{
+		auth: signers,
+	}
+	mockSigner.EXPECT().PublicAddress().Return(senderAddr)
+	addr, err := sut.PublicAddress()
+	require.NoError(t, err)
+	require.Len(t, addr, 1)
 }

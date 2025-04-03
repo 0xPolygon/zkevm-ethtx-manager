@@ -19,6 +19,7 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	"github.com/0xPolygonHermez/zkevm-synchronizer-l1/synchronizer/l1_check_block"
+	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -67,19 +68,15 @@ type l1Tx struct {
 	Data     string `json:"input"`
 }
 
+// This var is for be able to test New function that require to create a Mock of Etherman
+var ethTxManagerEthermanFactoryFunc = func(cfg etherman.Config,
+	signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
+	return etherman.NewClient(cfg, signersConfig)
+}
+
 // New creates new eth tx manager
 func New(cfg Config) (*Client, error) {
-	etherman, err := etherman.NewClient(cfg.Etherman)
-	if err != nil {
-		return nil, err
-	}
-
-	auth, err := etherman.LoadAuthFromKeyStore(cfg.PrivateKeys[0].Path, cfg.PrivateKeys[0].Password)
-	if err != nil {
-		return nil, err
-	}
-
-	err = etherman.AddOrReplaceAuth(*auth)
+	etherman, err := ethTxManagerEthermanFactoryFunc(cfg.Etherman, cfg.PrivateKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +86,19 @@ func New(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
+	publicAddr, err := etherman.PublicAddress()
+	if err != nil {
+		return nil, fmt.Errorf("ethtxmanager error getting public address: %w", err)
+	}
+	if len(publicAddr) == 0 {
+		return nil, fmt.Errorf("ethtxmanager error getting public address: no public address found")
+	}
+
 	client := Client{
 		cfg:      cfg,
 		etherman: etherman,
 		storage:  storage,
-		from:     auth.From,
+		from:     publicAddr[0],
 	}
 
 	log.Init(cfg.Log)
