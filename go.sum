@@ -20,8 +20,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/VictoriaMetrics/fastcache v1.12.2 h1:N0y9ASrJ0F6h0QaC3o6uJb3NIZ9VKLjCM7NQbSmF7WI=
 github.com/VictoriaMetrics/fastcache v1.12.2/go.mod h1:AmC+Nzz1+3G2eCPapF6UcsnkThDcMsQicp4xDukwJYI=
-github.com/agglayer/go_signer v0.0.4 h1:TrblUQUtXUrv1m81mxxVaiUgEZ26NtvTJU6H5PL7vUw=
-github.com/agglayer/go_signer v0.0.4/go.mod h1:YIoQNqvA10L/qV9vlAV8rXjejnyPpnYA0A/zU1uxXeY=
+github.com/agglayer/go_signer v0.0.5 h1:k9tnWhGELZaKqEHG8s7r5V13wBANhokDYZGTlGU/cDo=
+github.com/agglayer/go_signer v0.0.5/go.mod h1:YIoQNqvA10L/qV9vlAV8rXjejnyPpnYA0A/zU1uxXeY=
 github.com/aws/aws-sdk-go-v2 v1.32.8 h1:cZV+NUS/eGxKXMtmyhtYPJ7Z4YLoI/V8bkTdRZfYhGo=
 github.com/aws/aws-sdk-go-v2 v1.32.8/go.mod h1:P5WJBrYqqbWVaOxgH0X/FYYD47/nooaPOZPlQdmiN2U=
 github.com/aws/aws-sdk-go-v2/config v1.28.11 h1:7Ekru0IkRHRnSRWGQLnLN6i0o1Jncd0rHo2T130+tEQ=

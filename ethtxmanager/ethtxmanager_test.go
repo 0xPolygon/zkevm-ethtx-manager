@@ -205,7 +205,7 @@ func TestGetMonitoredTxnIteration(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	mockEtherman := mocks.NewEthermanInterface(t)
-	ettxmanagerEthermanFactoryFunc = func(cfg etherman.Config, signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
+	ethTxManagerEthermanFactoryFunc = func(cfg etherman.Config, signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
 		return mockEtherman, nil
 	}
 	mockEtherman.EXPECT().PublicAddress().Return([]common.Address{common.HexToAddress("0x1")}, nil).Once()

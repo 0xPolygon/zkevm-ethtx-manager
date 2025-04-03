@@ -28,6 +28,10 @@ func NewEthermanSigners(ctx context.Context, chainID uint64,
 		if err != nil {
 			return nil, err
 		}
+		_, found := res.signers[signer.PublicAddress()]
+		if found {
+			return nil, fmt.Errorf("multiples signer form address %s", signer.PublicAddress().Hex())
+		}
 		res.signers[signer.PublicAddress()] = signer
 	}
 	return &res, nil

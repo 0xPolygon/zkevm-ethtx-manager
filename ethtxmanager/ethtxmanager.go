@@ -69,14 +69,14 @@ type l1Tx struct {
 }
 
 // This var is for be able to test New function that require to create a Mock of Etherman
-var ettxmanagerEthermanFactoryFunc = func(cfg etherman.Config,
+var ethTxManagerEthermanFactoryFunc = func(cfg etherman.Config,
 	signersConfig []signertypes.SignerConfig) (types.EthermanInterface, error) {
 	return etherman.NewClient(cfg, signersConfig)
 }
 
 // New creates new eth tx manager
 func New(cfg Config) (*Client, error) {
-	etherman, err := ettxmanagerEthermanFactoryFunc(cfg.Etherman, cfg.PrivateKeys)
+	etherman, err := ethTxManagerEthermanFactoryFunc(cfg.Etherman, cfg.PrivateKeys)
 	if err != nil {
 		return nil, err
 	}
