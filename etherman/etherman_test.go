@@ -153,6 +153,26 @@ func TestNewClient(t *testing.T) {
 	require.NotNil(t, sut)
 }
 
+func TestNewClientDefaultConfig(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	ethclientFactoryFunc = func(url string) (EthereumClient, error) {
+		return mockEth, nil
+	}
+	mockEth.EXPECT().ChainID(mock.Anything).Return(big.NewInt(1), nil)
+	sut, err := NewClient(Config{
+		URL: "http://localhost:8545",
+	}, []signertypes.SignerConfig{
+		{
+			Config: map[string]interface{}{
+				"path":     "test",
+				"password": "test",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, sut)
+}
+
 func TestPublicAddress(t *testing.T) {
 	mockSigner := mocks.NewSigner(t)
 	senderAddr := common.HexToAddress("0x1")
