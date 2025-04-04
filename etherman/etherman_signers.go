@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/0xPolygon/zkevm-ethtx-manager/log"
 	"github.com/agglayer/go_signer/signer"
 	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -19,12 +20,13 @@ type EthermanSigners struct {
 // NewEthermanSigners creates a new instance of EthermanSigners
 func NewEthermanSigners(ctx context.Context, chainID uint64,
 	config []signertypes.SignerConfig) (*EthermanSigners, error) {
+	logger := log.WithFields("module", "eth-signer")
 	res := EthermanSigners{
 		chainID: chainID,
 		signers: make(map[common.Address]signertypes.Signer),
 	}
 	for i, signerConfig := range config {
-		signer, err := signer.NewSigner(ctx, chainID, signerConfig, fmt.Sprintf("signer-%d", i), nil)
+		signer, err := signer.NewSigner(ctx, chainID, signerConfig, fmt.Sprintf("signer-%d", i), logger)
 		if err != nil {
 			return nil, err
 		}
