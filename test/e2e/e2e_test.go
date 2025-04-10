@@ -97,8 +97,7 @@ func TestEthTxManagerE2E(t *testing.T) {
 	}
 	for _, result := range results {
 		log.Infof("Removing tx %s", result.ID)
-		err = client.Remove(ctx, result.ID)
-		if err != nil {
+		if err = client.Remove(ctx, result.ID); err != nil {
 			log.Errorf("Error removing tx %s: %s", result.ID, err)
 		}
 	}
