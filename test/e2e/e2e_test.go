@@ -21,7 +21,10 @@ var (
 	to0 = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
-func TestXxx(t *testing.T) {
+func TestEthTxManagerE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	config := ethtxmanager.Config{
 		FrequencyToMonitorTxs:           types.Duration{Duration: 1 * time.Second},
 		WaitTxToBeMined:                 types.Duration{Duration: 2 * time.Minute},
