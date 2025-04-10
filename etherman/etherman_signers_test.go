@@ -57,7 +57,7 @@ func TestNewEthermanSigners(t *testing.T) {
 	cfg = append(cfg, cfg[0])
 	_, err = NewEthermanSigners(ctx, chainID, cfg)
 	require.Error(t, err, "it s reading same signer so there are multiple signers for the same address")
-	require.ErrorContains(t, err, "multiples signer for address")
+	require.ErrorContains(t, err, "multiple signers for address")
 }
 
 func TestEthermanSignersSignTx(t *testing.T) {
