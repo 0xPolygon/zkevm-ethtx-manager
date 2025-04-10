@@ -34,6 +34,9 @@ func NewEthermanSigners(ctx context.Context, chainID uint64,
 		if found {
 			return nil, fmt.Errorf("multiples signer form address %s", signer.PublicAddress().Hex())
 		}
+		if err = signer.Initialize(ctx); err != nil {
+			return nil, err
+		}
 		res.signers[signer.PublicAddress()] = signer
 	}
 	return &res, nil

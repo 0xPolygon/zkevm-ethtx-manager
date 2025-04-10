@@ -36,7 +36,7 @@ func main() {
 		Log:                             log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
 		PrivateKeys: []signertypes.SignerConfig{{
 			Method: signertypes.MethodLocal,
-			Config: map[string]interface{}{"Path": "test.keystore", "Password": "testonly"},
+			Config: map[string]interface{}{"path": "test.keystore", "password": "testonly"},
 		}},
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
