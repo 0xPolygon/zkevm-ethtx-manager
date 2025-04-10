@@ -164,8 +164,8 @@ func TestNewClientDefaultConfig(t *testing.T) {
 	}, []signertypes.SignerConfig{
 		{
 			Config: map[string]interface{}{
-				"path":     "test",
-				"password": "test",
+				"path":     "../test/test.keystore",
+				"password": "testonly",
 			},
 		},
 	})
