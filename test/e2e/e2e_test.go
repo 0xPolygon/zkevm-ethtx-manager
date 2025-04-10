@@ -1,9 +1,10 @@
-package main
+package e2e
 
 import (
 	"context"
 	"math/big"
 	"math/rand"
+	"testing"
 	"time"
 
 	"github.com/0xPolygon/zkevm-ethtx-manager/config/types"
@@ -13,14 +14,17 @@ import (
 	coreTypes "github.com/0xPolygon/zkevm-ethtx-manager/types"
 	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/stretchr/testify/require"
 )
 
 var (
 	to0 = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
-func main() {
+func TestEthTxManagerE2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	config := ethtxmanager.Config{
 		FrequencyToMonitorTxs:           types.Duration{Duration: 1 * time.Second},
 		WaitTxToBeMined:                 types.Duration{Duration: 2 * time.Minute},
@@ -31,12 +35,12 @@ func main() {
 		MaxGasPriceLimit:                0,
 		SafeStatusL1NumberOfBlocks:      0,
 		FinalizedStatusL1NumberOfBlocks: 0,
-		StoragePath:                     "ethtxmanager-persistence.db",
+		StoragePath:                     "/tmp/ethtxmanager-persistence.db",
 		ReadPendingL1Txs:                false,
 		Log:                             log.Config{Level: "info", Environment: "development", Outputs: []string{"stderr"}},
 		PrivateKeys: []signertypes.SignerConfig{{
 			Method: signertypes.MethodLocal,
-			Config: map[string]interface{}{"path": "test.keystore", "password": "testonly"},
+			Config: map[string]interface{}{"path": "../test.keystore", "password": "testonly"},
 		}},
 		Etherman: etherman.Config{
 			URL:              "http://localhost:8545",
@@ -48,9 +52,7 @@ func main() {
 	log.Init(config.Log)
 	log.Debug("Creating ethtxmanager")
 	client, err := ethtxmanager.New(config)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	log.Debug("ethtxmanager created")
 
 	ctx := context.Background()
@@ -62,7 +64,7 @@ func main() {
 
 	for i := 0; i < 1; i++ {
 		time.Sleep(100 * time.Millisecond)
-		sendTransaction(ctx, client)
+		sendTransaction(t, ctx, client)
 	}
 
 	for {
@@ -95,39 +97,20 @@ func main() {
 	}
 	for _, result := range results {
 		log.Infof("Removing tx %s", result.ID)
-		err = client.Remove(ctx, result.ID)
-		if err != nil {
+		if err = client.Remove(ctx, result.ID); err != nil {
 			log.Errorf("Error removing tx %s: %s", result.ID, err)
 		}
 	}
 }
 
-func sendTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client) common.Hash {
+func sendTransaction(t *testing.T, ctx context.Context, ethtxmanager *ethtxmanager.Client) common.Hash {
+	t.Helper()
 	id, err := ethtxmanager.Add(ctx, &to0, big.NewInt(1), []byte{byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}, 0, nil)
 	if err != nil {
 		log.Errorf("Error sending transaction: %s", err)
 	} else {
 		log.Infof("Transaction sent with id %s", id)
 	}
-	return id
-}
-
-func sendBlobTransaction(ctx context.Context, ethtxmanager *ethtxmanager.Client) common.Hash {
-	blobBytes := []byte{255, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256)), byte(rand.Intn(256))}
-	blob, err := ethtxmanager.EncodeBlobData(blobBytes)
-	if err != nil {
-		log.Errorf("Error encoding blob data")
-		return common.Hash{}
-	}
-	blobSidecar := ethtxmanager.MakeBlobSidecar([]kzg4844.Blob{blob})
-
-	// data := []byte{228, 103, 97, 196} // pol method
-	data := []byte{}
-	id, err := ethtxmanager.Add(ctx, &to0, big.NewInt(0), data, 0, blobSidecar)
-	if err != nil {
-		log.Errorf("Error sending Blob transaction: %s", err)
-	} else {
-		log.Infof("Blob Transaction sent with id %s", id)
-	}
+	require.NoError(t, err)
 	return id
 }

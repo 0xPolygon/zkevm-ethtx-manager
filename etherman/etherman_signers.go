@@ -30,10 +30,15 @@ func NewEthermanSigners(ctx context.Context, chainID uint64,
 		if err != nil {
 			return nil, err
 		}
+		if err = signer.Initialize(ctx); err != nil {
+			return nil, fmt.Errorf("signer (%+v) fails to initialize. Err:%w", signerConfig, err)
+		}
+
 		_, found := res.signers[signer.PublicAddress()]
 		if found {
-			return nil, fmt.Errorf("multiples signer form address %s", signer.PublicAddress().Hex())
+			return nil, fmt.Errorf("multiple signers for address %s. signer (%+v)", signer.PublicAddress().Hex(), signerConfig)
 		}
+
 		res.signers[signer.PublicAddress()] = signer
 	}
 	return &res, nil

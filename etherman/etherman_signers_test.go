@@ -12,6 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	fileKeystorePath     = "../test/test.keystore"
+	fileKeystorePassword = "testonly"
+)
+
 func TestNewEthermanSigners(t *testing.T) {
 	ctx := context.TODO()
 	chainID := uint64(1)
@@ -31,9 +36,28 @@ func TestNewEthermanSigners(t *testing.T) {
 	_, err = NewEthermanSigners(ctx, chainID, []signertypes.SignerConfig{
 		{
 			Method: "local",
+			Config: map[string]interface{}{
+				"path":     "dontexists",
+				"password": "password",
+			},
 		},
 	})
+	require.Error(t, err)
+	cfg := []signertypes.SignerConfig{
+		{
+			Method: "local",
+			Config: map[string]interface{}{
+				"path":     fileKeystorePath,
+				"password": fileKeystorePassword,
+			},
+		},
+	}
+	_, err = NewEthermanSigners(ctx, chainID, cfg)
 	require.NoError(t, err)
+	cfg = append(cfg, cfg[0])
+	_, err = NewEthermanSigners(ctx, chainID, cfg)
+	require.Error(t, err, "it must fail because it should detect duplicate signer with the same public address")
+	require.ErrorContains(t, err, "multiple signers for address")
 }
 
 func TestEthermanSignersSignTx(t *testing.T) {
