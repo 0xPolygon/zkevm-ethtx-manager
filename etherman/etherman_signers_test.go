@@ -31,9 +31,13 @@ func TestNewEthermanSigners(t *testing.T) {
 	_, err = NewEthermanSigners(ctx, chainID, []signertypes.SignerConfig{
 		{
 			Method: "local",
+			Config: map[string]interface{}{
+				"path":     "dontexists",
+				"password": "password",
+			},
 		},
 	})
-	require.NoError(t, err)
+	require.Error(t, err)
 }
 
 func TestEthermanSignersSignTx(t *testing.T) {
