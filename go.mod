@@ -5,7 +5,7 @@ go 1.23.7
 require (
 	github.com/0xPolygonHermez/zkevm-synchronizer-l1 v1.0.7
 	github.com/agglayer/go_signer v0.0.5
-	github.com/ethereum/go-ethereum v1.15.5
+	github.com/ethereum/go-ethereum v1.15.9
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.3.2
 	github.com/mattn/go-sqlite3 v1.14.24
