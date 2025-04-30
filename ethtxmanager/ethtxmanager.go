@@ -660,7 +660,7 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			}
 			logger.Debugf("signed tx added to the monitored tx history")
 		}
-
+		logger.Debugf("Sending Tx: %s", curlCommandForTx(signedTx))
 		// check if the tx is already in the network, if not, send it
 		_, _, err = c.etherman.GetTx(ctx, signedTx.Hash())
 		// if not found, send it tx to the network
