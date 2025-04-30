@@ -658,6 +658,15 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			err := c.etherman.SendTx(ctx, signedTx)
 			if err != nil {
 				logger.Warnf("failed to send tx %v to network: %v", signedTx.Hash().String(), err)
+				// Add a warning with a curl command to send the transaction manually
+				rawTx, encodeErr := signedTx.MarshalJSON()
+				if encodeErr != nil {
+					logger.Warnf("failed to encode transaction for manual submission: %v", encodeErr)
+				} else {
+					logger.Warnf(`To manually send the transaction, use the following curl command:
+						curl -X POST --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["%s"],"id":1}' -H "Content-Type: application/json" <YOUR_ETHEREUM_NODE_URL>
+						`, string(rawTx))
+				}
 				return
 			}
 			logger.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
