@@ -22,6 +22,7 @@ import (
 	signertypes "github.com/agglayer/go_signer/signer/types"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -605,6 +606,23 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 	return nil
 }
 
+func curlCommandForTxOld(signedTx *ethTypes.Transaction) string {
+	rawTx, err := signedTx.MarshalJSON()
+	if err != nil {
+		return "err: fails signedTx.MarshalJSON"
+	}
+	return fmt.Sprintf(`curl -X POST --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["%s"],"id":1}' -H "Content-Type: application/json" <YOUR_ETHEREUM_NODE_URL>`,
+		string(rawTx))
+}
+func curlCommandForTx(signedTx *ethTypes.Transaction) string {
+	data, err := signedTx.MarshalBinary()
+	if err != nil {
+		return "err: fails signedTx.MarshalBinary: " + err.Error()
+	}
+	return fmt.Sprintf(`curl -X POST --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["%s"],"id":1}' -H "Content-Type: application/json" <YOUR_ETHEREUM_NODE_URL>`,
+		hexutil.Encode(data))
+}
+
 // monitorTx does all the monitoring steps to the monitored tx
 func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logger *log.Logger) {
 	var err error
@@ -659,14 +677,9 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			if err != nil {
 				logger.Warnf("failed to send tx %v to network: %v", signedTx.Hash().String(), err)
 				// Add a warning with a curl command to send the transaction manually
-				rawTx, encodeErr := signedTx.MarshalJSON()
-				if encodeErr != nil {
-					logger.Warnf("failed to encode transaction for manual submission: %v", encodeErr)
-				} else {
-					logger.Warnf(`To manually send the transaction, use the following curl command:
-						curl -X POST --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["%s"],"id":1}' -H "Content-Type: application/json" <YOUR_ETHEREUM_NODE_URL>
-						`, string(rawTx))
-				}
+				logger.Warnf(`To manually send the transaction, use the following curl command: 
+						%s"`, curlCommandForTx(signedTx))
+
 				return
 			}
 			logger.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
