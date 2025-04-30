@@ -606,20 +606,13 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 	return nil
 }
 
-func curlCommandForTxOld(signedTx *ethTypes.Transaction) string {
-	rawTx, err := signedTx.MarshalJSON()
-	if err != nil {
-		return "err: fails signedTx.MarshalJSON"
-	}
-	return fmt.Sprintf(`curl -X POST --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["%s"],"id":1}' -H "Content-Type: application/json" <YOUR_ETHEREUM_NODE_URL>`,
-		string(rawTx))
-}
 func curlCommandForTx(signedTx *ethTypes.Transaction) string {
 	data, err := signedTx.MarshalBinary()
 	if err != nil {
 		return "err: fails signedTx.MarshalBinary: " + err.Error()
 	}
-	return fmt.Sprintf(`curl -X POST --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["%s"],"id":1}' -H "Content-Type: application/json" <YOUR_ETHEREUM_NODE_URL>`,
+	return fmt.Sprintf(`curl -X POST --data '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["%s"],"id":1}'
+		 -H "Content-Type: application/json" <YOUR_ETHEREUM_NODE_URL>`,
 		hexutil.Encode(data))
 }
 
