@@ -204,6 +204,7 @@ func (etherMan *Client) EstimateGas(
 	value *big.Int,
 	data []byte,
 ) (uint64, error) {
+	log.Debugf("EstimateGas from: %s to: %s value: %s data: %x", from.Hex(), to.Hex(), value.String(), data)
 	return etherMan.EthClient.EstimateGas(ctx, ethereum.CallMsg{
 		From:  from,
 		To:    to,
