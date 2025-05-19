@@ -3,6 +3,7 @@ package etherman
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -156,20 +157,28 @@ func (etherMan *Client) WaitTxToBeMined(
 	return true, nil
 }
 
-// GetL1GasPrice gets the l1 gas price
-func (etherMan *Client) GetL1GasPrice(ctx context.Context) *big.Int {
-	// Get gasPrice from providers
+// GetL1GasPrice gets the L1 gas price from available providers
+func (etherMan *Client) GetL1GasPrice(ctx context.Context) (*big.Int, error) {
 	gasPrice := big.NewInt(0)
+	success := false
+
 	for i, prov := range etherMan.GasProviders.Providers {
 		gp, err := prov.SuggestGasPrice(ctx)
 		if err != nil {
 			log.Warnf("error getting gas price from provider %d. Error: %s", i+1, err.Error())
-		} else if gasPrice.Cmp(gp) == -1 { // gasPrice < gp
+			continue
+		}
+		success = true
+		if gasPrice.Cmp(gp) == -1 { // gasPrice < gp
 			gasPrice = gp
 		}
 	}
-	log.Debug("gasPrice chose: ", gasPrice)
-	return gasPrice
+
+	if !success {
+		return nil, errors.New("failed to get gas price from all providers")
+	}
+	log.Debug("gasPrice chosen: ", gasPrice)
+	return gasPrice, nil
 }
 
 // SendTx sends a tx to L1
@@ -187,11 +196,12 @@ func (etherMan *Client) PendingNonce(ctx context.Context, account common.Address
 	return etherMan.EthClient.PendingNonceAt(ctx, account)
 }
 
-// SuggestedGasPrice returns the suggest nonce for the network at the moment
+// SuggestedGasPrice returns the suggested gas price for the network at the moment
+// Allows zero as a valid gas price
 func (etherMan *Client) SuggestedGasPrice(ctx context.Context) (*big.Int, error) {
-	suggestedGasPrice := etherMan.GetL1GasPrice(ctx)
-	if suggestedGasPrice.Cmp(big.NewInt(0)) == 0 {
-		return nil, errors.New("failed to get the suggested gas price")
+	suggestedGasPrice, err := etherMan.GetL1GasPrice(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting suggested gas price: %w", err)
 	}
 	return suggestedGasPrice, nil
 }
