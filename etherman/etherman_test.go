@@ -189,3 +189,21 @@ func TestPublicAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, addr, 1)
 }
+
+func TestGetL1GasPrice(t *testing.T) {
+	mockEth := mocks.NewEthereumClient(t)
+	errSuggestGasPrice := errors.New("failed to get gas price from all providers")
+	mockEth.EXPECT().SuggestGasPrice(mock.Anything).Return(nil, errSuggestGasPrice).Once()
+	sut := Client{
+		GasProviders: externalGasProviders{
+			Providers: []ethereum.GasPricer{
+				mockEth,
+			},
+		},
+	}
+
+	ctx := context.TODO()
+	price, err := sut.GetL1GasPrice(ctx)
+	require.EqualError(t, err, errSuggestGasPrice.Error())
+	require.Nil(t, price)
+}
