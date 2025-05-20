@@ -25,7 +25,8 @@ var (
 	// ErrPrivateKeyNotFound used when the provided sender does not have a private key registered to be used
 	ErrPrivateKeyNotFound = errors.New("can't find sender private key to sign tx")
 	// ErrObjectIsNil used when the object is nil
-	ErrObjectIsNil = errors.New("object is nil")
+	ErrObjectIsNil       = errors.New("object is nil")
+	ErrGasPriceProviders = errors.New("failed to get gas price from all providers")
 )
 
 // EthereumClient is an interface that combines all the ethereum client interfaces
@@ -175,7 +176,7 @@ func (etherMan *Client) GetL1GasPrice(ctx context.Context) (*big.Int, error) {
 	}
 
 	if !success {
-		return nil, errors.New("failed to get gas price from all providers")
+		return nil, ErrGasPriceProviders
 	}
 	log.Debug("gasPrice chosen: ", gasPrice)
 	return gasPrice, nil
