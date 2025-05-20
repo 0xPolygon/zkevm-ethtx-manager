@@ -189,3 +189,57 @@ func TestPublicAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, addr, 1)
 }
+
+func TestGetL1GasPrice(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name          string
+		mockSetup     func(mockEth *mocks.EthereumClient)
+		expectedPrice *big.Int
+		expectedError error
+	}{
+		{
+			name: "all providers fail",
+			mockSetup: func(mockEth *mocks.EthereumClient) {
+				err := errors.New("failed to get gas price from all providers")
+				mockEth.On("SuggestGasPrice", mock.Anything).Return(nil, err).Once()
+			},
+			expectedPrice: nil,
+			expectedError: errGasPriceProviders,
+		},
+		{
+			name: "provider returns valid gas price",
+			mockSetup: func(mockEth *mocks.EthereumClient) {
+				mockEth.On("SuggestGasPrice", mock.Anything).Return(big.NewInt(100), nil).Once()
+			},
+			expectedPrice: big.NewInt(100),
+			expectedError: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockEth := mocks.NewEthereumClient(t)
+			tt.mockSetup(mockEth)
+
+			client := &Client{
+				GasProviders: externalGasProviders{
+					Providers: []ethereum.GasPricer{mockEth},
+				},
+			}
+
+			price, err := client.GetL1GasPrice(ctx)
+
+			if tt.expectedError != nil {
+				require.ErrorIs(t, err, tt.expectedError)
+				require.Nil(t, price)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedPrice, price)
+			}
+
+			mockEth.AssertExpectations(t)
+		})
+	}
+}
