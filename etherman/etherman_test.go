@@ -206,7 +206,7 @@ func TestGetL1GasPrice(t *testing.T) {
 				mockEth.On("SuggestGasPrice", mock.Anything).Return(nil, err).Once()
 			},
 			expectedPrice: nil,
-			expectedError: ErrGasPriceProviders,
+			expectedError: errGasPriceProviders,
 		},
 		{
 			name: "provider returns valid gas price",
