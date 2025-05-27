@@ -1104,6 +1104,11 @@ func (c *Client) MakeBlobSidecar(blobs []kzg4844.Blob) *ethTypes.BlobTxSidecar {
 	}
 }
 
+// From returns the sender (from) address associated with the client
+func (c *Client) From() common.Address {
+	return c.from
+}
+
 // createMonitoredTxLogger creates an instance of logger with all the important
 // fields already set for a types.MonitoredTx
 func createMonitoredTxLogger(mTx types.MonitoredTx) *log.Logger {
