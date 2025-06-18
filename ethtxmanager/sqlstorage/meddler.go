@@ -156,7 +156,7 @@ func (m HashMeddler) PreRead(fieldAddr interface{}) (scanTarget interface{}, err
 	}
 	return new(string), nil
 }
-func (b HashMeddler) PostReadDoulePtr(fieldPtr, scanTarget interface{}) error {
+func (b HashMeddler) postReadDoulePtr(fieldPtr, scanTarget interface{}) error {
 	rawHashPtr, ok := scanTarget.(**string)
 	if !ok {
 		return errors.New("scanTarget is not **string")
@@ -165,7 +165,6 @@ func (b HashMeddler) PostReadDoulePtr(fieldPtr, scanTarget interface{}) error {
 	hashPtr, ok := fieldPtr.(**common.Hash)
 	if ok {
 		if rawHashPtr == nil || *rawHashPtr == nil {
-			hashPtr = new(*common.Hash)
 			return nil
 		}
 		// If the string is empty, set the hash to nil
@@ -185,7 +184,7 @@ func (b HashMeddler) PostReadDoulePtr(fieldPtr, scanTarget interface{}) error {
 func (b HashMeddler) PostRead(fieldPtr, scanTarget interface{}) error {
 	_, ok := scanTarget.(**string)
 	if ok {
-		return b.PostReadDoulePtr(fieldPtr, scanTarget)
+		return b.postReadDoulePtr(fieldPtr, scanTarget)
 	}
 	rawHashPtr, ok := scanTarget.(*string)
 	if !ok {

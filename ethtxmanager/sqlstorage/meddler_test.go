@@ -16,6 +16,13 @@ type certificateInfo struct {
 	FinalizedL1InfoTreeRoot *common.Hash `meddler:"finalized_l1_info_tree_root,hash"`
 }
 
+type certificateInfoBadType struct {
+	Height        uint64      `meddler:"height"`
+	CertificateID common.Hash `meddler:"certificate_id,hash"`
+	// The field is nullable on DB but not in struct
+	FinalizedL1InfoTreeRoot common.Hash `meddler:"finalized_l1_info_tree_root,hash"`
+}
+
 func TestMeddlerHashPointerIsNull(t *testing.T) {
 	initMeddler()
 	db := createExampleDB(t)
@@ -25,6 +32,10 @@ func TestMeddlerHashPointerIsNull(t *testing.T) {
 	require.Nil(t, certificateInfo.FinalizedL1InfoTreeRoot, "FinalizedL1InfoTreeRoot should be nil for height 0")
 	fmt.Print(certificateInfo)
 
+	var badCertificateInfo certificateInfoBadType
+	err = meddler.QueryRow(db, &badCertificateInfo, "SELECT * FROM certificate_info where height=0;")
+	require.Error(t, err, "bad type case")
+	require.ErrorContains(t, err, "converting NULL to string is unsupported")
 }
 
 func TestMeddlerHashPointerIsNotNull(t *testing.T) {
@@ -35,6 +46,12 @@ func TestMeddlerHashPointerIsNotNull(t *testing.T) {
 	require.NoError(t, err, "data case")
 	require.NotNil(t, certificateInfo.FinalizedL1InfoTreeRoot, "FinalizedL1InfoTreeRoot should not be nil for height 1")
 	fmt.Print(certificateInfo)
+}
+
+func TestMeddlerHashpostReadDoulePtrBadParms(t *testing.T) {
+	h := HashMeddler{}
+	err := h.postReadDoulePtr(nil, nil)
+	require.Error(t, err)
 }
 
 func createExampleDB(t *testing.T) *sql.DB {
