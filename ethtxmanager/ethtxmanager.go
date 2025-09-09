@@ -405,28 +405,32 @@ func (c *Client) buildResult(ctx context.Context, mTx types.MonitoredTx) (types.
 	history := mTx.HistoryHashSlice()
 	txs := make(map[common.Hash]types.TxResult, len(history))
 
-	for _, txHash := range history {
-		tx, _, err := c.etherman.GetTx(ctx, txHash)
-		if !errors.Is(err, ethereum.NotFound) && err != nil {
-			return types.MonitoredTxResult{}, err
-		}
+	// Skip blockchain calls for evicted transactions - they were never successfully sent
+	if mTx.Status != types.MonitoredTxStatusEvicted {
+		for _, txHash := range history {
+			tx, _, err := c.etherman.GetTx(ctx, txHash)
+			if !errors.Is(err, ethereum.NotFound) && err != nil {
+				return types.MonitoredTxResult{}, err
+			}
 
-		receipt, err := c.etherman.GetTxReceipt(ctx, txHash)
-		if !errors.Is(err, ethereum.NotFound) && err != nil {
-			return types.MonitoredTxResult{}, err
-		}
+			receipt, err := c.etherman.GetTxReceipt(ctx, txHash)
+			if !errors.Is(err, ethereum.NotFound) && err != nil {
+				return types.MonitoredTxResult{}, err
+			}
 
-		revertMessage, err := c.etherman.GetRevertMessage(ctx, tx)
-		if !errors.Is(err, ethereum.NotFound) && err != nil && err.Error() != ErrExecutionReverted.Error() {
-			return types.MonitoredTxResult{}, err
-		}
+			revertMessage, err := c.etherman.GetRevertMessage(ctx, tx)
+			if !errors.Is(err, ethereum.NotFound) && err != nil && err.Error() != ErrExecutionReverted.Error() {
+				return types.MonitoredTxResult{}, err
+			}
 
-		txs[txHash] = types.TxResult{
-			Tx:            tx,
-			Receipt:       receipt,
-			RevertMessage: revertMessage,
+			txs[txHash] = types.TxResult{
+				Tx:            tx,
+				Receipt:       receipt,
+				RevertMessage: revertMessage,
+			}
 		}
 	}
+	// For evicted transactions, txs map remains empty
 
 	result := types.MonitoredTxResult{
 		ID:                 mTx.ID,
@@ -621,6 +625,17 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 	var err error
 	logger.Info("processing")
 
+	// Check if max retries is configured and if this transaction has exceeded the limit
+	if c.cfg.MaxRetries > 0 && mTx.RetryCount >= c.cfg.MaxRetries {
+		logger.Warnf("transaction exceeded max retries (%d), evicting from tx manager", c.cfg.MaxRetries)
+		mTx.Status = types.MonitoredTxStatusEvicted
+		err = c.storage.Update(ctx, *mTx.MonitoredTx)
+		if err != nil {
+			logger.Errorf("failed to update monitored tx to evicted status: %v", err)
+		}
+		return
+	}
+
 	var signedTx *ethTypes.Transaction
 	if !mTx.confirmed {
 		// review tx and increase gas and gas price if needed
@@ -628,6 +643,13 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			err := c.reviewMonitoredTxGas(ctx, mTx, logger)
 			if err != nil {
 				logger.Errorf("failed to review monitored tx: %v", err)
+				// Increment retry count when gas review fails
+				mTx.RetryCount++
+				logger.Debugf("incremented retry count to %d after gas review failure", mTx.RetryCount)
+				updateErr := c.storage.Update(ctx, *mTx.MonitoredTx)
+				if updateErr != nil {
+					logger.Errorf("failed to update retry count after gas review failure: %v", updateErr)
+				}
 				return
 			}
 		}
@@ -670,9 +692,16 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 			if err != nil {
 				logger.Warnf("failed to send tx %v to network: %v", signedTx.Hash().String(), err)
 				// Add a warning with a curl command to send the transaction manually
-				logger.Warnf(`To manually send the transaction, use the following curl command: 
+				logger.Warnf(`To manually send the transaction, use the following curl command:
 						%s"`, curlCommandForTx(signedTx))
 
+				// Increment retry count when sending fails
+				mTx.RetryCount++
+				logger.Debugf("incremented retry count to %d after send failure", mTx.RetryCount)
+				err = c.storage.Update(ctx, *mTx.MonitoredTx)
+				if err != nil {
+					logger.Errorf("failed to update retry count after send failure: %v", err)
+				}
 				return
 			}
 			logger.Infof("signed tx sent to the network: %v", signedTx.Hash().String())
@@ -985,6 +1014,7 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 		types.MonitoredTxStatusSent,
 		types.MonitoredTxStatusFailed,
 		types.MonitoredTxStatusMined,
+		types.MonitoredTxStatusEvicted,
 	}
 	// keep running until there are pending monitored txs
 	for {
@@ -1025,6 +1055,12 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 				continue
 			}
 
+			// if the result is evicted, it exceeded max retries - notify caller
+			if result.Status == types.MonitoredTxStatusEvicted {
+				resultHandler(result)
+				continue
+			}
+
 			// if the result is either not confirmed or failed, it means we need to wait until it gets confirmed of failed.
 			for {
 				// wait before refreshing the result info
@@ -1037,11 +1073,12 @@ func (c *Client) ProcessPendingMonitoredTxs(ctx context.Context, resultHandler R
 					continue
 				}
 
-				// if the result status is mined, safe, finalized or failed, breaks the wait loop
+				// if the result status is mined, safe, finalized, failed or evicted, breaks the wait loop
 				if result.Status == types.MonitoredTxStatusMined ||
 					result.Status == types.MonitoredTxStatusSafe ||
 					result.Status == types.MonitoredTxStatusFinalized ||
-					result.Status == types.MonitoredTxStatusFailed {
+					result.Status == types.MonitoredTxStatusFailed ||
+					result.Status == types.MonitoredTxStatusEvicted {
 					break
 				}
 
