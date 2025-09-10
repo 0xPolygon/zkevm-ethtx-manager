@@ -406,6 +406,7 @@ func (c *Client) buildResult(ctx context.Context, mTx types.MonitoredTx) (types.
 	txs := make(map[common.Hash]types.TxResult, len(history))
 
 	// Skip blockchain calls for evicted transactions - they were never successfully sent
+	// For evicted transactions, txs map remains empty
 	if mTx.Status != types.MonitoredTxStatusEvicted {
 		for _, txHash := range history {
 			tx, _, err := c.etherman.GetTx(ctx, txHash)
@@ -430,7 +431,6 @@ func (c *Client) buildResult(ctx context.Context, mTx types.MonitoredTx) (types.
 			}
 		}
 	}
-	// For evicted transactions, txs map remains empty
 
 	result := types.MonitoredTxResult{
 		ID:                 mTx.ID,
