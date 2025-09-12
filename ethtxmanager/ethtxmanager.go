@@ -626,8 +626,8 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 	logger.Info("processing")
 
 	// Check if max retries is configured and if this transaction has exceeded the limit
-	if c.cfg.MaxRetries > 0 && mTx.RetryCount >= c.cfg.MaxRetries {
-		logger.Debugf("transaction exceeded max retries (%d), evicting from tx manager", c.cfg.MaxRetries)
+	if c.cfg.MaxEstimateGasRetries > 0 && mTx.RetryCount >= c.cfg.MaxEstimateGasRetries {
+		logger.Debugf("transaction exceeded max retries (%d), evicting from tx manager", c.cfg.MaxEstimateGasRetries)
 		mTx.Status = types.MonitoredTxStatusEvicted
 		err = c.storage.Update(ctx, *mTx.MonitoredTx)
 		if err != nil {
