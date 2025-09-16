@@ -32,6 +32,9 @@ const (
 
 	// MonitoredTxStatusFinalized means the tx was already mined M (M > N) blocks ago
 	MonitoredTxStatusFinalized = MonitoredTxStatus("finalized")
+
+	// MonitoredTxStatusEvicted means the tx exceeded the maximum number of retries and was evicted
+	MonitoredTxStatusEvicted = MonitoredTxStatus("evicted")
 )
 
 // MonitoredTxStatus represents the status of a monitored tx
@@ -102,6 +105,9 @@ type MonitoredTx struct {
 
 	// EstimateGas indicates whether gas should be estimated or the last value should be reused
 	EstimateGas bool `mapstructure:"estimateGas" meddler:"estimate_gas"`
+
+	// RetryCount tracks the number of times this transaction has been retried
+	RetryCount uint64 `mapstructure:"retryCount" meddler:"retry_count"`
 }
 
 // Tx uses the current information to build a tx

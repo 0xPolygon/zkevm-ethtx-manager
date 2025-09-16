@@ -83,4 +83,8 @@ type Config struct {
 	// overwriting the default value provided by the network
 	// 0 means that the default value will be used
 	FinalizedStatusL1NumberOfBlocks uint64 `mapstructure:"FinalizedStatusL1NumberOfBlocks"`
+
+	// EstimateGasMaxRetries is the maximum number of times a transaction will be retried before being evicted
+	// 0 means unlimited retries (default behavior)
+	EstimateGasMaxRetries uint64 `mapstructure:"EstimateGasMaxRetries"`
 }
