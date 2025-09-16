@@ -16,6 +16,7 @@ import (
 	"github.com/0xPolygon/zkevm-ethtx-manager/mocks"
 	"github.com/0xPolygon/zkevm-ethtx-manager/types"
 	signertypes "github.com/agglayer/go_signer/signer/types"
+	"github.com/ethereum/go-ethereum"
 	common "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -457,5 +458,93 @@ func TestProcessPendingMonitoredTxs(t *testing.T) {
 
 		testData.sut.ProcessPendingMonitoredTxs(testData.ctx, resultHandler)
 		require.Equal(t, types.MonitoredTxStatusEvicted, status)
+	})
+}
+
+func TestMonitorTxGasReviewFailureRetryIncrement(t *testing.T) {
+	t.Run("Gas review failure - increments retry count", func(t *testing.T) {
+		testData := newTestData(t, true)
+
+		mTx := &monitoredTxnIteration{
+			MonitoredTx: &types.MonitoredTx{
+				ID:          common.HexToHash("0x123"),
+				Status:      types.MonitoredTxStatusSent,
+				RetryCount:  2,
+				EstimateGas: true,
+			},
+		}
+
+		// Mock gas review failure
+		testData.ethermanMock.EXPECT().SuggestedGasPrice(testData.ctx).Return(nil, errors.New("gas price error")).Once()
+
+		// Expect retry count update
+		testData.storageMock.EXPECT().Update(testData.ctx, mock.MatchedBy(func(tx types.MonitoredTx) bool {
+			return tx.RetryCount == 3 && tx.ID == mTx.ID
+		})).Return(nil).Once()
+
+		logger := createMonitoredTxLogger(*mTx.MonitoredTx)
+		testData.sut.monitorTx(testData.ctx, mTx, logger)
+
+		require.Equal(t, uint64(3), mTx.RetryCount)
+	})
+
+	t.Run("Gas review failure - storage update fails", func(t *testing.T) {
+		testData := newTestData(t, true)
+
+		mTx := &monitoredTxnIteration{
+			MonitoredTx: &types.MonitoredTx{
+				ID:          common.HexToHash("0x123"),
+				Status:      types.MonitoredTxStatusSent,
+				RetryCount:  1,
+				EstimateGas: true,
+			},
+		}
+
+		// Mock gas review failure
+		testData.ethermanMock.EXPECT().SuggestedGasPrice(testData.ctx).Return(nil, errors.New("gas price error")).Once()
+
+		// Expect retry count update to fail
+		testData.storageMock.EXPECT().Update(testData.ctx, mock.MatchedBy(func(tx types.MonitoredTx) bool {
+			return tx.RetryCount == 2
+		})).Return(errors.New("storage error")).Once()
+
+		logger := createMonitoredTxLogger(*mTx.MonitoredTx)
+		testData.sut.monitorTx(testData.ctx, mTx, logger)
+
+		// Retry count should still be incremented even if storage update fails
+		require.Equal(t, uint64(2), mTx.RetryCount)
+	})
+}
+
+func TestMonitorTxSendFailureRetryIncrement(t *testing.T) {
+	t.Run("Send failure - increments retry count", func(t *testing.T) {
+		testData := newTestData(t, true)
+		testData.sut.cfg.EstimateGasMaxRetries = 10 // Ensure we don't hit eviction
+
+		mTx := &monitoredTxnIteration{
+			MonitoredTx: &types.MonitoredTx{
+				ID:         common.HexToHash("0x123"),
+				Status:     types.MonitoredTxStatusCreated,
+				RetryCount: 1,
+				Value:      big.NewInt(0),
+				Data:       []byte{},
+				Gas:        21000,
+				GasPrice:   big.NewInt(1000000000),
+				History:    make(map[common.Hash]bool),
+			},
+		}
+
+		// Mock signing and transaction existence check, but fail on SendTx
+		testData.ethermanMock.EXPECT().SignTx(testData.ctx, mock.Anything, mock.Anything).Return(ethtypes.NewTx(&ethtypes.LegacyTx{}), nil).Once()
+		testData.ethermanMock.EXPECT().GetTx(testData.ctx, mock.Anything).Return(nil, false, ethereum.NotFound).Once()
+		testData.ethermanMock.EXPECT().SendTx(testData.ctx, mock.Anything).Return(errors.New("network error")).Once()
+
+		// Mock storage updates - first for history, second for retry count after send failure
+		testData.storageMock.EXPECT().Update(testData.ctx, mock.Anything).Return(nil).Times(2)
+
+		logger := createMonitoredTxLogger(*mTx.MonitoredTx)
+		testData.sut.monitorTx(testData.ctx, mTx, logger)
+
+		require.Equal(t, uint64(2), mTx.RetryCount)
 	})
 }
