@@ -409,3 +409,53 @@ func TestMonitorTxEstimateGasMaxRetriesIntegration(t *testing.T) {
 	require.Equal(t, types.MonitoredTxStatusEvicted, storedTx.Status)
 	require.Equal(t, uint64(3), storedTx.RetryCount)
 }
+
+func TestProcessPendingMonitoredTxs(t *testing.T) {
+	t.Run("No transactions - returns immediately", func(t *testing.T) {
+		testData := newTestData(t, true)
+		testData.storageMock.EXPECT().GetByStatus(mock.Anything, mock.Anything).Return([]types.MonitoredTx{}, nil).Once()
+
+		var callCount int
+		resultHandler := func(result types.MonitoredTxResult) { callCount++ }
+
+		testData.sut.ProcessPendingMonitoredTxs(testData.ctx, resultHandler)
+		require.Equal(t, 0, callCount)
+	})
+
+	t.Run("Mined transaction - calls handler", func(t *testing.T) {
+		testData := newTestData(t, true)
+		tx := types.MonitoredTx{
+			ID: common.HexToHash("0x1"), Status: types.MonitoredTxStatusMined,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}
+
+		testData.storageMock.EXPECT().GetByStatus(mock.Anything, mock.Anything).Return([]types.MonitoredTx{tx}, nil).Once()
+		testData.storageMock.EXPECT().Get(mock.Anything, tx.ID).Return(tx, nil).Once()
+		testData.storageMock.EXPECT().Update(mock.Anything, mock.Anything).Return(nil).Once()
+		testData.storageMock.EXPECT().GetByStatus(mock.Anything, mock.Anything).Return([]types.MonitoredTx{}, nil).Once()
+
+		var status types.MonitoredTxStatus
+		resultHandler := func(result types.MonitoredTxResult) { status = result.Status }
+
+		testData.sut.ProcessPendingMonitoredTxs(testData.ctx, resultHandler)
+		require.Equal(t, types.MonitoredTxStatusMined, status)
+	})
+
+	t.Run("Evicted transaction - calls handler", func(t *testing.T) {
+		testData := newTestData(t, true)
+		tx := types.MonitoredTx{
+			ID: common.HexToHash("0x1"), Status: types.MonitoredTxStatusEvicted,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}
+
+		testData.storageMock.EXPECT().GetByStatus(mock.Anything, mock.Anything).Return([]types.MonitoredTx{tx}, nil).Once()
+		testData.storageMock.EXPECT().Get(mock.Anything, tx.ID).Return(tx, nil).Maybe() // For buildResult
+		testData.storageMock.EXPECT().GetByStatus(mock.Anything, mock.Anything).Return([]types.MonitoredTx{}, nil).Once()
+
+		var status types.MonitoredTxStatus
+		resultHandler := func(result types.MonitoredTxResult) { status = result.Status }
+
+		testData.sut.ProcessPendingMonitoredTxs(testData.ctx, resultHandler)
+		require.Equal(t, types.MonitoredTxStatusEvicted, status)
+	})
+}
