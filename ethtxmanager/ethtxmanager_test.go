@@ -241,7 +241,7 @@ func newTestData(t *testing.T, useMockStorage bool) *testEthTxManagerData {
 		etherman: ethermanMock,
 	}
 	if useMockStorage {
-		storageMock := mocks.NewStorageInterface(t)
+		storageMock = mocks.NewStorageInterface(t)
 		sut.storage = storageMock
 	} else {
 		storagePath := path.Join(t.TempDir(), "txmanager.sqlite")
@@ -256,4 +256,156 @@ func newTestData(t *testing.T, useMockStorage bool) *testEthTxManagerData {
 		sut:          sut,
 		ctx:          context.Background(),
 	}
+}
+
+func TestMonitorTxEstimateGasMaxRetries(t *testing.T) {
+	tests := []struct {
+		name                      string
+		estimateGasMaxRetries     uint64
+		retryCount                uint64
+		shouldEvict               bool
+		storageUpdateShouldFail   bool
+		expectedStatus            types.MonitoredTxStatus
+		expectedStorageUpdateCall bool
+	}{
+		{
+			name:                      "Unlimited retries (EstimateGasMaxRetries = 0) - should not evict",
+			estimateGasMaxRetries:     0,
+			retryCount:                100,
+			shouldEvict:               false,
+			expectedStatus:            types.MonitoredTxStatusCreated,
+			expectedStorageUpdateCall: false,
+		},
+		{
+			name:                      "Retry count below max retries - should not evict",
+			estimateGasMaxRetries:     5,
+			retryCount:                3,
+			shouldEvict:               false,
+			expectedStatus:            types.MonitoredTxStatusCreated,
+			expectedStorageUpdateCall: false,
+		},
+		{
+			name:                      "Retry count equals max retries - should evict",
+			estimateGasMaxRetries:     5,
+			retryCount:                5,
+			shouldEvict:               true,
+			expectedStatus:            types.MonitoredTxStatusEvicted,
+			expectedStorageUpdateCall: true,
+		},
+		{
+			name:                      "Retry count exceeds max retries - should evict",
+			estimateGasMaxRetries:     3,
+			retryCount:                10,
+			shouldEvict:               true,
+			expectedStatus:            types.MonitoredTxStatusEvicted,
+			expectedStorageUpdateCall: true,
+		},
+		{
+			name:                      "Eviction with storage update failure",
+			estimateGasMaxRetries:     2,
+			retryCount:                5,
+			shouldEvict:               true,
+			storageUpdateShouldFail:   true,
+			expectedStatus:            types.MonitoredTxStatusEvicted,
+			expectedStorageUpdateCall: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testData := newTestData(t, true)
+			testData.sut.cfg = Config{
+				EstimateGasMaxRetries: tt.estimateGasMaxRetries,
+			}
+
+			// Create a monitored transaction with specific retry count
+			mTx := &monitoredTxnIteration{
+				MonitoredTx: &types.MonitoredTx{
+					ID:         common.HexToHash("0x123"),
+					From:       common.HexToAddress("0x456"),
+					To:         &common.Address{},
+					Status:     types.MonitoredTxStatusCreated,
+					RetryCount: tt.retryCount,
+					History:    make(map[common.Hash]bool),
+					Value:      big.NewInt(0),
+					Data:       []byte{},
+					Gas:        21000,
+					GasPrice:   big.NewInt(1000000000),
+				},
+			}
+
+			if tt.expectedStorageUpdateCall {
+				if tt.storageUpdateShouldFail {
+					testData.storageMock.EXPECT().Update(testData.ctx, mock.MatchedBy(func(tx types.MonitoredTx) bool {
+						return tx.Status == types.MonitoredTxStatusEvicted &&
+							tx.ID == mTx.ID &&
+							tx.RetryCount == tt.retryCount
+					})).Return(errors.New("storage update failed")).Once()
+				} else {
+					testData.storageMock.EXPECT().Update(testData.ctx, mock.MatchedBy(func(tx types.MonitoredTx) bool {
+						return tx.Status == types.MonitoredTxStatusEvicted &&
+							tx.ID == mTx.ID &&
+							tx.RetryCount == tt.retryCount
+					})).Return(nil).Once()
+				}
+			}
+
+			// For non-evicted cases, setup minimal mocks to prevent function from failing
+			if !tt.shouldEvict {
+				// Mock the basic operations that monitorTx will try to perform
+				testData.ethermanMock.EXPECT().SignTx(testData.ctx, mock.Anything, mock.Anything).Return(ethtypes.NewTx(&ethtypes.LegacyTx{}), nil).Maybe()
+				testData.storageMock.EXPECT().Update(testData.ctx, mock.Anything).Return(nil).Maybe()
+				testData.ethermanMock.EXPECT().GetTx(testData.ctx, mock.Anything).Return(nil, false, errGenericNotFound).Maybe()
+				testData.ethermanMock.EXPECT().SendTx(testData.ctx, mock.Anything).Return(nil).Maybe()
+				testData.ethermanMock.EXPECT().WaitTxToBeMined(testData.ctx, mock.Anything, mock.Anything).Return(false, nil).Maybe()
+			}
+
+			logger := createMonitoredTxLogger(*mTx.MonitoredTx)
+			testData.sut.monitorTx(testData.ctx, mTx, logger)
+
+			require.Equal(t, tt.expectedStatus, mTx.Status, "Transaction status should match expected")
+			testData.storageMock.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMonitorTxEstimateGasMaxRetriesIntegration(t *testing.T) {
+	// This test uses real storage to verify the complete flow
+	testData := newTestData(t, false)
+	testData.sut.cfg = Config{
+		EstimateGasMaxRetries: 3,
+	}
+
+	mTx := types.MonitoredTx{
+		ID:         common.HexToHash("0x123"),
+		From:       common.HexToAddress("0x456"),
+		To:         &common.Address{},
+		Status:     types.MonitoredTxStatusCreated,
+		RetryCount: 3, // Equals max retries, should be evicted
+		History:    make(map[common.Hash]bool),
+		Value:      big.NewInt(0),
+		Data:       []byte{},
+		Gas:        21000,
+		GasPrice:   big.NewInt(1000000000),
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	err := testData.sut.storage.Add(testData.ctx, mTx)
+	require.NoError(t, err)
+
+	iteration := &monitoredTxnIteration{
+		MonitoredTx: &mTx,
+	}
+	logger := createMonitoredTxLogger(mTx)
+	testData.sut.monitorTx(testData.ctx, iteration, logger)
+
+	// Verify the transaction was evicted
+	require.Equal(t, types.MonitoredTxStatusEvicted, iteration.Status)
+
+	// Verify the change was persisted to storage
+	storedTx, err := testData.sut.storage.Get(testData.ctx, mTx.ID)
+	require.NoError(t, err)
+	require.Equal(t, types.MonitoredTxStatusEvicted, storedTx.Status)
+	require.Equal(t, uint64(3), storedTx.RetryCount)
 }
