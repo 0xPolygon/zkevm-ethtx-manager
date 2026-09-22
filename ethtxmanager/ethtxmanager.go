@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -618,6 +619,13 @@ func (c *Client) waitSafeTxToBeFinalized(ctx context.Context) error {
 	return nil
 }
 
+func isNonceTooLowError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "nonce too low")
+}
+
 func curlCommandForTx(signedTx *ethTypes.Transaction) string {
 	data, err := signedTx.MarshalBinary()
 	if err != nil {
@@ -702,6 +710,14 @@ func (c *Client) monitorTx(ctx context.Context, mTx *monitoredTxnIteration, logg
 				// Add a warning with a curl command to send the transaction manually
 				logger.Warnf(`To manually send the transaction, use the following curl command:
 						%s"`, curlCommandForTx(signedTx))
+
+				// A nonce-too-low response proves this nonce can no longer be used.
+				// Move the tx back to Created so the next iteration reuses the existing,
+				// sender-coordinated PendingNonce refresh path before signing again.
+				if isNonceTooLowError(err) {
+					mTx.Status = types.MonitoredTxStatusCreated
+					logger.Infof("nonce too low; transaction will refresh its nonce on the next monitoring cycle")
+				}
 
 				// Increment retry count when sending fails
 				mTx.RetryCount++

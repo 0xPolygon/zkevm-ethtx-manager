@@ -287,6 +287,65 @@ func newTestData(t *testing.T, useMockStorage bool) *testEthTxManagerData {
 	}
 }
 
+func TestIsNonceTooLowError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil", err: nil, want: false},
+		{name: "exact", err: errors.New("nonce too low"), want: true},
+		{name: "rpc detail", err: errors.New("nonce too low: next nonce 8, tx nonce 7"), want: true},
+		{name: "case insensitive", err: errors.New("Nonce Too Low"), want: true},
+		{name: "other send error", err: errors.New("replacement transaction underpriced"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, isNonceTooLowError(tt.err))
+		})
+	}
+}
+
+func TestMonitorTxNonceTooLowSchedulesNonceRefresh(t *testing.T) {
+	testData := newTestData(t, true)
+	signedTx := ethtypes.NewTx(&ethtypes.LegacyTx{
+		Nonce:    7,
+		Gas:      21000,
+		GasPrice: big.NewInt(1),
+		Value:    big.NewInt(0),
+	})
+
+	mTx := &monitoredTxnIteration{
+		MonitoredTx: &types.MonitoredTx{
+			ID:          common.HexToHash("0x123"),
+			From:        common.HexToAddress("0x456"),
+			To:          &common.Address{},
+			Status:      types.MonitoredTxStatusSent,
+			Nonce:       7,
+			History:     make(map[common.Hash]bool),
+			Value:       big.NewInt(0),
+			Data:        []byte{},
+			Gas:         21000,
+			GasPrice:    big.NewInt(1),
+			EstimateGas: false,
+		},
+	}
+
+	testData.ethermanMock.EXPECT().SuggestedGasPrice(testData.ctx).Return(big.NewInt(1), nil).Once()
+	testData.ethermanMock.EXPECT().SignTx(testData.ctx, mTx.From, mock.Anything).Return(signedTx, nil).Once()
+	testData.storageMock.EXPECT().Update(testData.ctx, mock.Anything).Return(nil).Twice()
+	testData.ethermanMock.EXPECT().GetTx(testData.ctx, signedTx.Hash()).Return(nil, false, ethereum.NotFound).Once()
+	testData.ethermanMock.EXPECT().SendTx(testData.ctx, signedTx).
+		Return(errors.New("nonce too low: next nonce 8, tx nonce 7")).Once()
+
+	testData.sut.monitorTx(testData.ctx, mTx, createMonitoredTxLogger(*mTx.MonitoredTx))
+
+	require.Equal(t, types.MonitoredTxStatusCreated, mTx.Status)
+	require.Equal(t, uint64(1), mTx.RetryCount)
+	testData.storageMock.AssertExpectations(t)
+}
+
 func TestMonitorTxEstimateGasMaxRetries(t *testing.T) {
 	tests := []struct {
 		name                      string
